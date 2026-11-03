@@ -1,0 +1,17 @@
+services:
+  feedster:
+    build: .
+    container_name: feedster
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Set a password to require sign-in (strongly recommended if exposed beyond your LAN).
+      FEEDSTER_PASSWORD: ""
+      FEEDSTER_REFRESH_MINUTES: "15"
+      FEEDSTER_RETENTION_DAYS: "90"
+    volumes:
+      - feedster-data:/data
+
+volumes:
+  feedster-data:

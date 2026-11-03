@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Feedster</title>
+  <link rel="icon" href="/icon.svg">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/vendor/purify.min.js"></script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <img src="/icon.svg" alt="" width="22" height="22">
+        <span>Feedster</span>
+      </div>
+      <button class="btn primary add-btn" id="addBtn">+ Add subscription</button>
+      <nav class="nav" id="nav"></nav>
+      <div class="sidebar-foot">
+        <button class="link" id="newFolderBtn">New folder</button>
+        <button class="link" id="settingsBtn">Settings</button>
+      </div>
+    </aside>
+
+    <section class="list-pane" id="listPane">
+      <header class="toolbar">
+        <button class="icon-btn mobile-only" id="menuBtn" title="Menu">☰</button>
+        <div class="title-wrap">
+          <h2 id="scopeTitle">All articles</h2>
+          <span class="muted" id="scopeCount"></span>
+        </div>
+        <div class="toolbar-actions">
+          <button class="icon-btn" id="refreshBtn" title="Refresh (r)">⟳</button>
+          <button class="icon-btn" id="markAllBtn" title="Mark all as read (Shift+A)">✓✓</button>
+          <button class="icon-btn" id="scopeMenuBtn" title="More">⋯</button>
+        </div>
+      </header>
+      <div class="filterbar">
+        <div class="seg" id="viewSeg">
+          <button data-view="unread">Unread</button>
+          <button data-view="all">All</button>
+        </div>
+        <div class="seg" id="layoutSeg">
+          <button data-layout="list" title="List">≡</button>
+          <button data-layout="cards" title="Cards">▦</button>
+        </div>
+        <input type="search" id="search" placeholder="Search articles  /">
+      </div>
+      <div class="articles" id="articles"></div>
+    </section>
+
+    <main class="reader" id="reader">
+      <div class="reader-empty" id="readerEmpty">
+        <p>Select an article to read it.</p>
+        <p class="muted keys">
+          <kbd>j</kbd>/<kbd>k</kbd> next/prev · <kbd>s</kbd> star · <kbd>m</kbd> read/unread ·
+          <kbd>v</kbd> open original · <kbd>r</kbd> refresh · <kbd>Shift</kbd>+<kbd>A</kbd> mark all read · <kbd>/</kbd> search
+        </p>
+      </div>
+      <article class="reader-article" id="readerArticle" hidden></article>
+    </main>
+  </div>
+
+  <div class="menu" id="menu" hidden></div>
+  <div class="toast" id="toast" hidden></div>
+
+  <dialog id="addDialog">
+    <form method="dialog" id="addForm">
+      <h3>Add subscription</h3>
+      <label>Website or feed URL
+        <input name="url" type="text" placeholder="https://example.com" required autocomplete="off">
+      </label>
+      <label>Folder
+        <select name="folder"></select>
+      </label>
+      <p class="error" id="addError" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn" value="cancel" data-close>Cancel</button>
+        <button class="btn primary" id="addSubmit">Subscribe</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog">
+    <form method="dialog">
+      <h3>Settings</h3>
+      <section>
+        <h4>Appearance</h4>
+        <div class="seg" id="themeSeg">
+          <button type="button" data-theme="auto">Auto</button>
+          <button type="button" data-theme="light">Light</button>
+          <button type="button" data-theme="dark">Dark</button>
+        </div>
+        <label class="check"><input type="checkbox" id="oldestFirst"> Show oldest first</label>
+        <label class="check"><input type="checkbox" id="markOnScroll"> Mark articles read as I scroll past them (cards view)</label>
+      </section>
+      <section>
+        <h4>Import / export</h4>
+        <p class="muted">Move subscriptions in or out with an OPML file (Inoreader, Feedly and most readers export one).</p>
+        <div class="row">
+          <label class="btn">Import OPML<input type="file" id="opmlFile" accept=".opml,.xml,text/xml" hidden></label>
+          <a class="btn" href="/api/opml" download>Export OPML</a>
+        </div>
+      </section>
+      <section>
+        <h4>Feed health</h4>
+        <div id="feedHealth" class="health"></div>
+      </section>
+      <div class="dialog-actions">
+        <button class="btn primary">Done</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

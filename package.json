@@ -1,0 +1,19 @@
+{
+  "name": "feedster",
+  "version": "1.0.0",
+  "description": "Self-hosted RSS/Atom feed reader",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "dompurify": "^3.4.17",
+    "fast-xml-parser": "^4.5.7"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}
