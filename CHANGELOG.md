@@ -4,6 +4,13 @@ All notable changes to Feedster are listed here, newest first. Version numbers f
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-03
+
+### Added
+
+- Sync with reading apps and browser extensions. Feedster now speaks the Google Reader API (the one FreshRSS and Miniflux offer) at `/api/greader.php` and the Fever API at `/api/fever.php`, so apps such as Reeder, NetNewsWire, ReadKit, FeedMe, Fluent Reader and Unread can sign in. Folders, read and starred state sync both ways; Google Reader apps can also add, rename, move and remove subscriptions.
+- A "Reading apps" section in Settings to choose the username and app password apps sign in with. It is separate from the web password, stored hashed, and saving a new one signs every app out.
+
 ## [1.0.0] - 2026-11-03
 
 First versioned release.

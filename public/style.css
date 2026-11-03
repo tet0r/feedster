@@ -250,6 +250,13 @@ dialog label:not(.btn):not(.check) { display: flex; flex-direction: column; gap:
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .error { color: var(--danger); margin: 0; }
+.sync-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.sync-form input { flex: 1 1 160px; }
+.sync-urls { margin: 4px 0 0; font-size: 13px; }
+.sync-urls dt { color: var(--muted); margin-top: 6px; }
+.sync-urls dd { margin: 2px 0 0; }
+.sync-urls code { font: 12.5px ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; user-select: all; }
+#syncState { color: var(--text-soft); }
 .health { max-height: 180px; overflow-y: auto; font-size: 13px; }
 .health div { display: flex; gap: 8px; padding: 3px 0; }
 .health .bad { color: var(--danger); }

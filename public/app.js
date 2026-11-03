@@ -798,6 +798,35 @@ $('#settingsBtn').addEventListener('click', () => {
       : `<span class="muted">${f.last_fetched ? `updated ${timeAgo(f.last_fetched)} ago` : 'pending'}</span>`}</div>`).join('')
     : '<p class="muted">No feeds yet.</p>';
   $('#settingsDialog').showModal();
+  api('/api/sync').then(showSync).catch(() => {});
+});
+
+// Credentials reading apps use for the Google Reader and Fever APIs.
+function showSync(s) {
+  $('#syncState').textContent = s.enabled
+    ? `On. Apps sign in as “${s.username}” with the app password. Saving a new password signs every app out.`
+    : 'Off. Choose a username and app password to turn it on.';
+  $('#syncUser').value = s.username;
+  $('#syncPass').value = '';
+  $('#syncOff').hidden = !s.enabled;
+  $('#syncError').hidden = true;
+  $('#greaderUrl').textContent = `${location.origin}/api/greader.php`;
+  $('#feverUrl').textContent = `${location.origin}/api/fever.php`;
+}
+
+async function saveSync(body) {
+  try {
+    showSync(await api('/api/sync', { method: 'PUT', body: JSON.stringify(body) }));
+    toast(body.username ? 'App sync saved' : 'App sync turned off');
+  } catch (err) {
+    $('#syncError').textContent = err.message;
+    $('#syncError').hidden = false;
+  }
+}
+
+$('#syncSave').addEventListener('click', () => saveSync({ username: $('#syncUser').value, password: $('#syncPass').value }));
+$('#syncOff').addEventListener('click', () => {
+  if (confirm('Turn off app sync? Every app signed in to Feedster will be signed out.')) saveSync({});
 });
 
 $('#oldestFirst').addEventListener('change', (e) => setOldestFirst(e.target.checked));

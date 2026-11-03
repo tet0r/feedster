@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { db } from './db.js';
 import { subscribe, refreshAll, isRefreshing, exportOpml, importOpml } from './feeds.js';
 import { VERSION, availableUpdate, startUpdateChecker } from './updates.js';
+import { send, readBody } from './http.js';
+import { syncStatus, setSyncCredentials } from './sync.js';
+import { handleFever } from './fever.js';
+import { handleGReader } from './greader.js';
 
 const PORT = Number(process.env.PORT || 8080);
 const PASSWORD = process.env.FEEDSTER_PASSWORD || '';
@@ -29,25 +33,6 @@ function authed(req) {
   const token = cookie?.[1] || '';
   const expected = sessionToken();
   return token.length === expected.length && crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
-}
-
-// ---- helpers ----
-
-function send(res, status, body, headers = {}) {
-  const isJson = typeof body !== 'string' && !Buffer.isBuffer(body);
-  res.writeHead(status, { 'Content-Type': isJson ? 'application/json' : 'text/plain; charset=utf-8', ...headers });
-  res.end(isJson ? JSON.stringify(body) : body);
-}
-
-async function readBody(req, limit = 10 * 1024 * 1024) {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > limit) throw Object.assign(new Error('Request too large'), { status: 413 });
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks).toString('utf8');
 }
 
 async function json(req) {
@@ -187,6 +172,21 @@ const routes = [
     return { started: true };
   }],
 
+  ['GET', /^\/api\/sync$/, () => syncStatus()],
+
+  ['PUT', /^\/api\/sync$/, async (req) => {
+    // Both set turns app sync on (or changes the password); both empty turns it off.
+    const body = await json(req);
+    const username = String(body.username ?? '').trim();
+    const password = String(body.password ?? '');
+    if (username || password) {
+      if (!username) return [400, { error: 'Username required' }];
+      if (password.length < 8) return [400, { error: 'Use at least 8 characters for the app password' }];
+    }
+    setSyncCredentials(username, password);
+    return syncStatus();
+  }],
+
   ['GET', /^\/api\/opml$/, () => [200, exportOpml(), {
     'Content-Type': 'text/x-opml; charset=utf-8',
     'Content-Disposition': 'attachment; filename="feedster.opml"',
@@ -236,6 +236,11 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(303, { Location: '/', 'Set-Cookie': `feedster=${sessionToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000` });
       return res.end();
     }
+    // Reading apps authenticate with their own credentials (see sync.js).
+    const greaderBase = ['/api/greader.php', '/api/greader'].find((b) => url.pathname === b || url.pathname.startsWith(`${b}/`));
+    if (greaderBase) return await handleGReader(req, res, url, greaderBase);
+    if (['/api/fever.php', '/api/fever', '/fever', '/fever/'].includes(url.pathname)) return await handleFever(req, res, url);
+
     if (!authed(req) && url.pathname !== '/style.css') {
       if (url.pathname.startsWith('/api/')) return send(res, 401, { error: 'Unauthorized' });
       return send(res, 200, LOGIN_PAGE, { 'Content-Type': 'text/html; charset=utf-8' });

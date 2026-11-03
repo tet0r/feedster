@@ -31,6 +31,17 @@ The database lives in the `feedster-data` volume. To use a host folder instead, 
 `feedster-data:/data` with e.g. `./data:/data` and make it writable by the container user
 (`sudo chown 1000:1000 ./data`).
 
+## Reading apps and browser extensions
+
+Feedster can be used from apps that support a **FreshRSS / Google Reader** or **Fever** account. Open **Settings → Reading apps**, choose a username and an app password (separate from the web sign-in password), then add an account in your app:
+
+| App type | Account to choose | Server address |
+| --- | --- | --- |
+| Reeder, NetNewsWire, ReadKit, FeedMe, Fluent Reader, Read You, browser extensions with FreshRSS support | FreshRSS (or "Google Reader API") | `https://your-server/api/greader.php` |
+| Unread, Reeder (classic), other Fever clients | Fever | `https://your-server/api/fever.php` |
+
+Folders, read and starred articles sync both ways. Google Reader apps can also add, rename, move and remove subscriptions. Mobile apps usually need the server to be reachable over HTTPS, so put Feedster behind a reverse proxy (see below) when using them away from home.
+
 ## Versions and updates
 
 The running version is shown at the bottom of the sidebar. Every 5 minutes Feedster asks GitHub whether a newer release exists; when one does, a banner appears within a minute, without reloading the page, and a line is written to the container log. Set `UPDATE_CHECK=false` to turn this off. To stay on a specific release, use an image tag such as `ghcr.io/tet0r/feedster:1.0.0` (or `:1.0` for patch updates only) instead of `:latest`.

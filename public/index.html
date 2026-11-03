@@ -107,6 +107,24 @@
         </div>
       </section>
       <section>
+        <h4>Reading apps</h4>
+        <p class="muted">Use Feedster from apps and browser extensions that support a <b>FreshRSS</b>, <b>Google Reader</b> or <b>Fever</b> account, such as Reeder, NetNewsWire, ReadKit, FeedMe or Fluent Reader. Read and starred articles stay in sync both ways.</p>
+        <p id="syncState"></p>
+        <div class="sync-form">
+          <input type="text" id="syncUser" placeholder="Username" autocomplete="off">
+          <input type="password" id="syncPass" placeholder="App password (8+ characters)" autocomplete="new-password">
+        </div>
+        <p class="error" id="syncError" hidden></p>
+        <div class="row">
+          <button type="button" class="btn" id="syncSave">Save</button>
+          <button type="button" class="btn danger" id="syncOff" hidden>Turn off</button>
+        </div>
+        <dl class="sync-urls">
+          <dt>Google Reader / FreshRSS server</dt><dd><code id="greaderUrl"></code></dd>
+          <dt>Fever server</dt><dd><code id="feverUrl"></code></dd>
+        </dl>
+      </section>
+      <section>
         <h4>Feed health</h4>
         <div id="feedHealth" class="health"></div>
       </section>
