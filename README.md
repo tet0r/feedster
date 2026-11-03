@@ -18,10 +18,13 @@ Open http://localhost:8080. Data is stored in `./data/feedster.db`.
 ### Docker
 
 ```bash
-docker compose up -d
+cp .env.example .env   # optional: set FEEDSTER_PASSWORD, port, etc.
+docker compose up -d --build
 ```
 
-The database lives in the `feedster-data` volume.
+The database lives in the `feedster-data` volume. To use a host folder instead, replace
+`feedster-data:/data` with e.g. `./data:/data` and make it writable by the container user
+(`sudo chown 1000:1000 ./data`).
 
 ## Configuration
 

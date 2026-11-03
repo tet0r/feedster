@@ -1,17 +1,29 @@
 services:
   feedster:
     build: .
+    image: feedster:latest
     container_name: feedster
     restart: unless-stopped
+    # Run a tiny init as PID 1 so `docker compose down` stops the app immediately.
+    init: true
     ports:
-      - "8080:8080"
+      - "${FEEDSTER_PORT:-8080}:8080"
     environment:
-      # Set a password to require sign-in (strongly recommended if exposed beyond your LAN).
-      FEEDSTER_PASSWORD: ""
-      FEEDSTER_REFRESH_MINUTES: "15"
-      FEEDSTER_RETENTION_DAYS: "90"
+      # Put FEEDSTER_PASSWORD=... in a .env file next to this one to require sign-in
+      # (strongly recommended if exposed beyond your LAN).
+      FEEDSTER_PASSWORD: ${FEEDSTER_PASSWORD:-}
+      FEEDSTER_REFRESH_MINUTES: ${FEEDSTER_REFRESH_MINUTES:-15}
+      FEEDSTER_RETENTION_DAYS: ${FEEDSTER_RETENTION_DAYS:-90}
+      TZ: ${TZ:-UTC}
     volumes:
       - feedster-data:/data
+    healthcheck:
+      # style.css is served without sign-in, so this works with a password set.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/style.css"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   feedster-data:
