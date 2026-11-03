@@ -54,6 +54,15 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS articles_unread ON articles (read, feed_id);
   CREATE INDEX IF NOT EXISTS articles_starred ON articles (starred) WHERE starred = 1;
 
+  -- data is NULL when no icon was found (the UI then shows a letter)
+  CREATE TABLE IF NOT EXISTS icons (
+    feed_id INTEGER PRIMARY KEY REFERENCES feeds(id) ON DELETE CASCADE,
+    data BLOB,
+    type TEXT,
+    source TEXT,
+    checked_at INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT

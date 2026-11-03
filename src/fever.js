@@ -88,9 +88,10 @@ export async function handleFever(req, res, url) {
     out.feeds_groups = feedsGroups();
   }
   if (p.has('feeds')) {
-    out.feeds = db.prepare('SELECT * FROM feeds ORDER BY title COLLATE NOCASE').all().map((f) => ({
+    out.feeds = db.prepare(`SELECT f.*, EXISTS (SELECT 1 FROM icons i WHERE i.feed_id = f.id AND i.data IS NOT NULL) AS has_icon
+      FROM feeds f ORDER BY f.title COLLATE NOCASE`).all().map((f) => ({
       id: f.id,
-      favicon_id: BLANK_FAVICON.id,
+      favicon_id: f.has_icon ? f.id + 1 : BLANK_FAVICON.id,
       title: f.title,
       url: f.url,
       site_url: f.site_url || '',
@@ -99,7 +100,11 @@ export async function handleFever(req, res, url) {
     }));
     out.feeds_groups = feedsGroups();
   }
-  if (p.has('favicons')) out.favicons = [BLANK_FAVICON];
+  if (p.has('favicons')) {
+    // Favicon ids are feed id + 1, since 1 is the blank fallback.
+    out.favicons = [BLANK_FAVICON, ...db.prepare('SELECT feed_id, type, data FROM icons WHERE data IS NOT NULL').all()
+      .map((i) => ({ id: i.feed_id + 1, data: `${i.type};base64,${Buffer.from(i.data).toString('base64')}` }))];
+  }
   if (p.has('items')) {
     out.items = items(p);
     out.total_items = db.prepare('SELECT COUNT(*) AS n FROM articles').get().n;

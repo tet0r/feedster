@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import { db, tx } from './db.js';
+import { updateIcon, iconDue } from './icons.js';
 
 const USER_AGENT = 'Feedster/1.0 (+self-hosted feed reader)';
 const FETCH_TIMEOUT_MS = 20_000;
@@ -89,6 +90,7 @@ export function parseFeed(body, feedUrl) {
     return {
       title: text(f.title),
       siteUrl,
+      icon: resolveUrl(text(f.icon) || text(f.logo), feedUrl),
       items: asArray(f.entry).map((e) => {
         const url = resolveUrl(atomLink(e.link), siteUrl || feedUrl);
         const content = text(e.content) || text(e.summary) || text(e['media:group']?.['media:description']);
@@ -110,9 +112,11 @@ export function parseFeed(body, feedUrl) {
   const rawItems = asArray(doc.rss ? channel.item : doc['rdf:RDF'].item);
   const siteUrl = resolveUrl(text(asArray(channel.link).find((l) => typeof l !== 'object' || l['#text'])), feedUrl);
 
+  const image = asArray(channel.image)[0] || asArray(doc['rdf:RDF']?.image)[0];
   return {
     title: text(channel.title),
     siteUrl,
+    icon: image ? resolveUrl(text(image.url) || image['@_rdf:resource'] || image['@_rdf:about'] || '', feedUrl) : null,
     items: rawItems.map((i) => {
       const url = resolveUrl(text(i.link) || (i.guid?.['@_isPermaLink'] !== 'false' ? text(i.guid) : ''), siteUrl || feedUrl);
       const content = text(i['content:encoded']) || text(i.description);
@@ -133,6 +137,7 @@ function parseJsonFeed(j, feedUrl) {
   return {
     title: j.title || '',
     siteUrl: resolveUrl(j.home_page_url, feedUrl),
+    icon: resolveUrl(j.favicon || j.icon, feedUrl),
     items: asArray(j.items).map((i) => ({
       guid: String(i.id ?? i.url),
       url: resolveUrl(i.url, feedUrl),
@@ -290,14 +295,19 @@ export async function subscribe(inputUrl, folderId = null) {
   ).run(url, title, parsed.siteUrl, folderId, Date.now(), Date.now());
   const id = Number(lastInsertRowid);
   storeItems(id, parsed.items);
+  // Usually quick; capped so a slow site can't hold up subscribing. A miss is retried on refresh.
+  const feed = { id, url, site_url: parsed.siteUrl };
+  await Promise.race([updateIcon(feed, parsed.icon).catch(() => {}), new Promise((r) => setTimeout(r, 10_000))]);
   return { id, existed: false };
 }
 
 export async function refreshFeed(feed) {
   try {
+    // When the icon needs looking up, fetch the whole feed (not "304 Not Modified") to read its image.
+    const needIcon = iconDue(feed.id);
     const headers = {};
-    if (feed.etag) headers['If-None-Match'] = feed.etag;
-    if (feed.last_modified) headers['If-Modified-Since'] = feed.last_modified;
+    if (feed.etag && !needIcon) headers['If-None-Match'] = feed.etag;
+    if (feed.last_modified && !needIcon) headers['If-Modified-Since'] = feed.last_modified;
     const res = await httpGet(feed.url, headers);
     if (res.status === 304) {
       db.prepare('UPDATE feeds SET last_fetched = ?, last_error = NULL WHERE id = ?').run(Date.now(), feed.id);
@@ -308,6 +318,7 @@ export async function refreshFeed(feed) {
     const added = storeItems(feed.id, parsed.items);
     db.prepare('UPDATE feeds SET etag = ?, last_modified = ?, last_fetched = ?, last_error = NULL, site_url = COALESCE(site_url, ?) WHERE id = ?')
       .run(res.headers.get('etag'), res.headers.get('last-modified'), Date.now(), parsed.siteUrl, feed.id);
+    if (needIcon) await updateIcon({ ...feed, site_url: feed.site_url || parsed.siteUrl }, parsed.icon).catch(() => {});
     return added;
   } catch (err) {
     db.prepare('UPDATE feeds SET last_fetched = ?, last_error = ? WHERE id = ?').run(Date.now(), String(err.message || err), feed.id);

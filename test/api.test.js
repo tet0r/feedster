@@ -18,7 +18,11 @@ let feedUrl;
 let app;
 let dataDir;
 
-const rss = (n) => `<?xml version="1.0"?><rss version="2.0"><channel><title>Local Feed</title><link>http://example.com/</link>${
+// A 16x16 PNG header: enough for Feedster to accept it as the feed's icon.
+const ICON = Buffer.concat([Buffer.from('89504e470d0a1a0a0000000d49484452000000100000001008060000001ff3ff61', 'hex'), Buffer.alloc(32)]);
+
+// Relative links keep every request on the local test server.
+const rss = (n) => `<?xml version="1.0"?><rss version="2.0"><channel><title>Local Feed</title><link>/</link><image><url>/icon.png</url></image>${
   Array.from({ length: n }, (_, i) => `<item><guid>item-${i}</guid><title>Post ${i}</title><link>http://example.com/${i}</link>
     <description>&lt;p&gt;Body ${i}&lt;/p&gt;</description><pubDate>${new Date(Date.UTC(2026, 0, 1 + i)).toUTCString()}</pubDate></item>`).join('')
 }</channel></rss>`;
@@ -50,7 +54,11 @@ async function fever(query, form = {}) {
 }
 
 before(async () => {
-  feedServer = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'application/rss+xml' }); res.end(rss(5)); });
+  feedServer = http.createServer((req, res) => {
+    if (req.url === '/icon.png') { res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(ICON); }
+    res.writeHead(200, { 'Content-Type': 'application/rss+xml' });
+    res.end(rss(5));
+  });
   await new Promise((r) => feedServer.listen(0, '127.0.0.1', r));
   feedUrl = `http://127.0.0.1:${feedServer.address().port}/feed.xml`;
 
@@ -97,6 +105,17 @@ test('Google Reader: sign in', async () => {
   authToken = 'nope';
   assert.equal((await gr('/reader/api/0/subscription/list?output=json')).status, 401);
   authToken = saved;
+});
+
+test('serves the icon the feed declares', async () => {
+  const feed = (await web('/api/state')).feeds[0];
+  assert.ok(feed.icon, 'icon version is set');
+  const res = await fetch(`${BASE}/api/feeds/${feed.id}/icon?v=${feed.icon}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'image/png');
+  assert.match(res.headers.get('content-security-policy'), /default-src 'none'/);
+  assert.deepEqual(Buffer.from(await res.arrayBuffer()), ICON);
+  assert.equal((await fetch(`${BASE}/api/feeds/999/icon`)).status, 404);
 });
 
 test('Google Reader: subscriptions, folders and unread counts', async () => {
@@ -188,7 +207,10 @@ test('Fever: groups, feeds, items and marking', async () => {
 
   const feeds = await fever('feeds');
   assert.equal(feeds.feeds[0].title, 'Renamed');
-  assert.equal((await fever('favicons')).favicons.length, 1);
+  assert.equal(feeds.feeds[0].favicon_id, 2);
+  const favicons = (await fever('favicons')).favicons;
+  assert.deepEqual(favicons.map((f) => f.id), [1, 2]);
+  assert.ok(favicons[1].data.startsWith('image/png;base64,'));
 
   const items = await fever('items&since_id=0');
   assert.equal(items.items.length, 5);

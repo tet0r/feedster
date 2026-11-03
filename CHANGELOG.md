@@ -4,6 +4,14 @@ All notable changes to Feedster are listed here, newest first. Version numbers f
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-03
+
+### Added
+
+- Feed icons are looked up on the server: the feed's own image first (when it is roughly square, not a wide banner), then the icons the website declares in its HTML, then `/favicon.ico`. Each candidate must really be an image, so HTML error pages and 1x1 tracking pixels are skipped. Only when nothing usable is found does the sidebar show the feed's first letter.
+- Icons are stored in the database and served by Feedster, so they load instantly and your browser no longer contacts every site. Fever apps receive them too.
+- Icons are checked again every 30 days; a site with no icon is checked again after 3 days, and one that didn't respond within the hour.
+
 ## [1.1.1] - 2026-11-03
 
 ### Fixed

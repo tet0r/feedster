@@ -61,22 +61,21 @@ function timeAgo(ts) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(d.getFullYear() !== new Date().getFullYear() && { year: 'numeric' }) });
 }
 
-function faviconUrl(feed) {
-  try { return `${new URL(feed.site_url || feed.url).origin}/favicon.ico`; } catch { return ''; }
-}
+const feedLetter = (feed) => (feed.title || '?').trim()[0]?.toUpperCase() || '?';
 
+// The server keeps each feed's icon (its own image, else the site's favicon); `icon` is
+// its version, or null when there is none and a letter is shown instead.
 function favicon(feed) {
-  const letter = esc((feed.title || '?').trim()[0]?.toUpperCase() || '?');
-  return `<img class="favicon" src="${esc(faviconUrl(feed))}" alt="" loading="lazy" data-letter="${letter}">`;
+  if (!feed.icon) return `<span class="favicon letter">${esc(feedLetter(feed))}</span>`;
+  return `<img class="favicon" src="/api/feeds/${feed.id}/icon?v=${feed.icon}" alt="" loading="lazy" data-letter="${esc(feedLetter(feed))}">`;
 }
 
-// Replace broken favicons with a letter badge.
+// Replace icons that fail to load with the letter.
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (img.tagName === 'IMG' && img.classList.contains('favicon')) {
     const span = document.createElement('span');
-    span.className = 'favicon glyph';
-    span.style.cssText = 'font-size:10px;font-weight:700;line-height:16px;background:var(--border);color:var(--text-soft)';
+    span.className = 'favicon letter';
     span.textContent = img.dataset.letter;
     img.replaceWith(span);
   } else if (img.tagName === 'IMG' && img.classList.contains('thumb')) {

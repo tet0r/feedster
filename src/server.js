@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { db } from './db.js';
 import { subscribe, refreshAll, isRefreshing, exportOpml, importOpml } from './feeds.js';
 import { VERSION, availableUpdate, startUpdateChecker } from './updates.js';
+import { getIcon } from './icons.js';
 import { send, readBody } from './http.js';
 import { syncStatus, setSyncCredentials } from './sync.js';
 import { handleFever } from './fever.js';
@@ -62,7 +63,8 @@ function state() {
   const folders = db.prepare('SELECT * FROM folders ORDER BY position, name COLLATE NOCASE').all();
   const feeds = db.prepare(`
     SELECT f.id, f.title, f.url, f.site_url, f.folder_id, f.last_fetched, f.last_error,
-      (SELECT COUNT(*) FROM articles a WHERE a.feed_id = f.id AND a.read = 0) AS unread
+      (SELECT COUNT(*) FROM articles a WHERE a.feed_id = f.id AND a.read = 0) AS unread,
+      (SELECT checked_at FROM icons i WHERE i.feed_id = f.id AND i.data IS NOT NULL) AS icon
     FROM feeds f ORDER BY f.title COLLATE NOCASE`).all();
   const totals = db.prepare('SELECT SUM(read = 0) AS unread, SUM(starred = 1) AS starred, COUNT(*) AS total FROM articles').get();
   return {
@@ -132,6 +134,19 @@ const routes = [
     } catch (err) {
       return [422, { error: err.message }];
     }
+  }],
+
+  ['GET', /^\/api\/feeds\/(\d+)\/icon$/, (_req, m) => {
+    const icon = getIcon(Number(m[1]));
+    if (!icon) return [404, { error: 'No icon' }];
+    // The URL carries the icon's version, so it can be cached. The CSP keeps an SVG icon
+    // from running scripts if someone opens it directly.
+    return [200, Buffer.from(icon.data), {
+      'Content-Type': icon.type,
+      'Cache-Control': 'private, max-age=604800',
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      'X-Content-Type-Options': 'nosniff',
+    }];
   }],
 
   ['PATCH', /^\/api\/feeds\/(\d+)$/, async (req, m) => {

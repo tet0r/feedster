@@ -103,7 +103,11 @@ a { color: var(--accent); }
 .nav-item:hover .count { display: none; }
 .nav-item .more:hover { background: var(--border); color: var(--text); }
 .nav-item .twisty { width: 14px; color: var(--muted); font-size: 10px; flex: none; text-align: center; }
-.nav-item .favicon { width: 16px; height: 16px; border-radius: 3px; flex: none; }
+.nav-item .favicon { width: 16px; height: 16px; border-radius: 3px; flex: none; object-fit: contain; }
+.favicon.letter {
+  display: inline-block; text-align: center; font-size: 10px; font-weight: 700; line-height: 16px;
+  background: var(--border); color: var(--text-soft);
+}
 .nav-item .glyph { width: 16px; text-align: center; flex: none; }
 .nav-item.error .label::after { content: " ⚠"; color: var(--danger); }
 .nav-section { margin: 14px 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
