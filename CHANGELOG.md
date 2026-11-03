@@ -4,6 +4,12 @@ All notable changes to Feedster are listed here, newest first. Version numbers f
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-03
+
+### Changed
+
+- Releases attach a separate extension package for each store: `feedster-chrome.zip` (Chrome Web Store, Edge and other Chromium browsers) and `feedster-firefox.zip` (Firefox Add-ons), each with only its own browser's settings, so neither browser warns about the other's. `feedster-extension.zip` still loads in both for developer-mode installs. `node scripts/package-extension.mjs` builds all three.
+
 ## [1.4.0] - 2026-11-03
 
 ### Added

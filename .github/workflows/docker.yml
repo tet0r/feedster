@@ -52,20 +52,14 @@ jobs:
           echo "minor=${version%.*}" >> "$GITHUB_OUTPUT"
           if git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then echo "new=false" >> "$GITHUB_OUTPUT"; else echo "new=true" >> "$GITHUB_OUTPUT"; fi
 
-      # The toolbar extension ships with each release as feedster-extension.zip (one package
-      # for Chrome, Edge and Firefox), stamped with the release version. Mozilla's linter
-      # catches manifest mistakes before anyone installs it.
+      # The toolbar extension ships with each release, stamped with the release version:
+      # feedster-chrome.zip and feedster-firefox.zip for the stores, and feedster-extension.zip
+      # (loads in both) for developer-mode installs. Mozilla's linter checks the Firefox package.
       - name: Browser extension
         run: |
-          npx -y web-ext@10.7.0 lint --source-dir extension --self-hosted
-          node -e '
-            const fs = require("fs");
-            const m = JSON.parse(fs.readFileSync("extension/manifest.json", "utf8"));
-            m.version = process.argv[1];
-            fs.writeFileSync("extension/manifest.json", JSON.stringify(m, null, 2) + "\n");
-          ' "${{ steps.version.outputs.version }}"
-          (cd extension && zip -qr ../feedster-extension.zip .)
-          unzip -l feedster-extension.zip
+          node scripts/package-extension.mjs
+          npx -y web-ext@10.7.0 lint --source-dir dist/firefox --self-hosted
+          unzip -l dist/feedster-chrome.zip
 
       - uses: docker/setup-qemu-action@v3
 
@@ -139,9 +133,9 @@ jobs:
           version="${{ steps.version.outputs.version }}"
           awk -v v="$version" 'index($0, "## [" v "]") == 1 {on=1; next} /^## \[/ {on=0} /^\[[^]]+\]: / {next} on' CHANGELOG.md > notes.md
           if grep -q '[^[:space:]]' notes.md; then
-            gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file notes.md feedster-extension.zip
+            gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file notes.md dist/feedster-chrome.zip dist/feedster-firefox.zip dist/feedster-extension.zip
           else
-            gh release create "v$version" --target "$GITHUB_SHA" --generate-notes feedster-extension.zip
+            gh release create "v$version" --target "$GITHUB_SHA" --generate-notes dist/feedster-chrome.zip dist/feedster-firefox.zip dist/feedster-extension.zip
           fi
 
       # The browser extension goes to both stores with each new release. Each store's first
@@ -157,7 +151,7 @@ jobs:
             exit 0
           fi
           # Submits for Mozilla's review and returns without waiting for it.
-          npx -y web-ext@10.7.0 sign --source-dir extension --channel listed --approval-timeout 0
+          npx -y web-ext@10.7.0 sign --source-dir dist/firefox --channel listed --approval-timeout 0
 
       - name: Publish extension to Chrome Web Store
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.version.outputs.new == 'true'
@@ -170,4 +164,4 @@ jobs:
             echo "::notice title=Chrome Web Store::CWS_SERVICE_ACCOUNT / CWS_PUBLISHER_ID / CWS_EXTENSION_ID not set; skipping. See store/SUBMITTING.md."
             exit 0
           fi
-          node scripts/publish-chrome.mjs feedster-extension.zip
+          node scripts/publish-chrome.mjs dist/feedster-chrome.zip

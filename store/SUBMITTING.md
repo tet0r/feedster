@@ -5,7 +5,7 @@ The release workflow publishes every new version of the extension to **Firefox A
 1. **The first version, submitted by hand.** Neither store's API can create a new listing, and this is where the listing text, images and privacy answers go in. Everything to paste is below.
 2. **API keys, saved as GitHub secrets**, so later releases can publish. Until they exist, the workflow skips publishing with a notice, and nothing fails.
 
-Use `feedster-extension.zip` from the [latest release](https://github.com/tet0r/feedster/releases/latest) (v1.4.0 or later) for the first submission. The images are in [`store/images`](images); `node store/render/render.mjs` regenerates them.
+For the first submission, use **`feedster-firefox.zip`** for Firefox and **`feedster-chrome.zip`** for Chrome. Releases from v1.4.1 attach both; `node scripts/package-extension.mjs` builds them into `dist/` from any checkout. (`feedster-extension.zip` loads in both browsers for developer-mode installs; give each store its own zip instead.) The images are in [`store/images`](images); `node store/render/render.mjs` regenerates them.
 
 ---
 
@@ -14,7 +14,7 @@ Use `feedster-extension.zip` from the [latest release](https://github.com/tet0r/
 ### First submission
 
 1. Go to <https://addons.mozilla.org/developers/addon/submit/distribution>, choose **On this site**, and continue.
-2. Upload `feedster-extension.zip`. Under compatibility, keep **Firefox** and untick **Firefox for Android** (toolbar extensions are a desktop feature).
+2. Upload `feedster-firefox.zip`. Under compatibility, keep **Firefox** and untick **Firefox for Android** (toolbar extensions are a desktop feature).
 3. **Source code:** answer **No**. The extension isn't minified or bundled, so the uploaded files are the source.
 4. Fill in the listing:
 
@@ -48,7 +48,7 @@ Publishing needs 2-Step Verification on the Google account that owns the develop
 
 ### First submission
 
-1. Open the [Developer Dashboard](https://chrome.google.com/webstore/devconsole), click **New item** and upload `feedster-extension.zip`.
+1. Open the [Developer Dashboard](https://chrome.google.com/webstore/devconsole), click **New item** and upload `feedster-chrome.zip`.
 2. **Store listing** tab:
 
 | Field | Value |
