@@ -1,45 +1,116 @@
-name: Publish Docker image
+name: Docker image
 
 on:
   push:
     branches: [main]
-    tags: ['v*']
+  pull_request:
   workflow_dispatch:
-
-permissions:
-  contents: read
-  packages: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # to create the release
+      packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Unit tests
+        run: |
+          npm ci
+          npm test
+
+      # The VERSION file is the release number. A release is cut the first time
+      # a given number reaches main; later pushes with the same number only refresh :latest.
+      - name: Read version
+        id: version
+        run: |
+          version=$(tr -d '[:space:]' < VERSION)
+          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "VERSION must look like 1.2.3"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "minor=${version%.*}" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then echo "new=false" >> "$GITHUB_OUTPUT"; else echo "new=true" >> "$GITHUB_OUTPUT"; fi
 
       - uses: docker/setup-qemu-action@v3
+
       - uses: docker/setup-buildx-action@v3
 
-      - uses: docker/login-action@v3
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - id: meta
+      # main -> :latest and :main, a new VERSION -> :1.2.3 and :1.2, every build -> :sha-<commit>
+      - name: Image tags
+        id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=sha,format=short
+            type=ref,event=branch
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' && steps.version.outputs.new == 'true' }}
+            type=raw,value=${{ steps.version.outputs.minor }},enable=${{ github.ref == 'refs/heads/main' && steps.version.outputs.new == 'true' }}
+            type=sha
 
-      - uses: docker/build-push-action@v6
+      - name: Build image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: feedster:test
+          cache-from: type=gha
+
+      # Starts the container the way the compose file does and checks it serves,
+      # runs unprivileged, can write its database and reports the right version
+      - name: Smoke test
+        run: |
+          docker volume create smoke-data
+          docker run -d --name fs -p 8080:8080 -v smoke-data:/data -e FEEDSTER_REFRESH_MINUTES=0 feedster:test
+          for i in $(seq 1 30); do curl -fs http://localhost:8080/api/state > /dev/null && break; sleep 1; done
+          curl -fs http://localhost:8080/api/state | tee state.json
+          grep -q "\"version\":\"${{ steps.version.outputs.version }}\"" state.json
+          docker exec fs test -s /data/feedster.db
+          uid=$(docker exec fs stat -c %u /proc/1)
+          echo "app runs as uid $uid"; test "$uid" != "0"
+
+      - name: Container logs
+        if: failure()
+        run: docker logs fs
+
+      # Pull requests build only, to check the Dockerfile still works
+      - name: Build and push
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Tags the commit and publishes this version's CHANGELOG section as the
+      # release notes; running instances see the release and offer the update
+      - name: Create release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.version.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          awk -v v="$version" 'index($0, "## [" v "]") == 1 {on=1; next} /^## \[/ {on=0} /^\[[^]]+\]: / {next} on' CHANGELOG.md > notes.md
+          if grep -q '[^[:space:]]' notes.md; then
+            gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file notes.md
+          else
+            gh release create "v$version" --target "$GITHUB_SHA" --generate-notes
+          fi

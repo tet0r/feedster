@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { db } from './db.js';
 import { subscribe, refreshAll, isRefreshing, exportOpml, importOpml } from './feeds.js';
+import { VERSION, availableUpdate, startUpdateChecker } from './updates.js';
 
 const PORT = Number(process.env.PORT || 8080);
 const PASSWORD = process.env.FEEDSTER_PASSWORD || '';
@@ -79,7 +80,14 @@ function state() {
       (SELECT COUNT(*) FROM articles a WHERE a.feed_id = f.id AND a.read = 0) AS unread
     FROM feeds f ORDER BY f.title COLLATE NOCASE`).all();
   const totals = db.prepare('SELECT SUM(read = 0) AS unread, SUM(starred = 1) AS starred, COUNT(*) AS total FROM articles').get();
-  return { folders, feeds, totals: { unread: totals.unread || 0, starred: totals.starred || 0, total: totals.total || 0 }, refreshing: isRefreshing() };
+  return {
+    folders,
+    feeds,
+    totals: { unread: totals.unread || 0, starred: totals.starred || 0, total: totals.total || 0 },
+    refreshing: isRefreshing(),
+    version: VERSION,
+    update: availableUpdate(),
+  };
 }
 
 const routes = [
@@ -251,8 +259,10 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Feedster listening on http://localhost:${PORT}${PASSWORD ? ' (password protected)' : ''}`);
+  console.log(`Feedster ${VERSION} listening on http://localhost:${PORT}${PASSWORD ? ' (password protected)' : ''}`);
 });
+
+startUpdateChecker();
 
 if (REFRESH_MINUTES > 0) {
   setInterval(() => refreshAll().catch(console.error), REFRESH_MINUTES * 60_000);

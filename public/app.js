@@ -132,8 +132,26 @@ async function loadState() {
   }
   renderNav();
   renderHeader();
+  showVersion(s);
   setRefreshing(s.refreshing);
   return s;
+}
+
+// Shows the running version, and a banner when a newer release exists (until dismissed for that version)
+function showVersion(s) {
+  const release = s.update?.url ? `<a href="${esc(s.update.url)}" target="_blank" rel="noopener noreferrer">` : '';
+  $('#version').innerHTML = `Feedster ${esc(s.version === 'dev' ? '(development build)' : `v${s.version}`)}`
+    + (s.update ? ` · ${release || '<span>'}<span class="new">v${esc(s.update.version)} available</span>${release ? '</a>' : '</span>'}` : '');
+  const banner = $('#update');
+  banner.hidden = !s.update || store.get('update-dismissed', null) === s.update.version;
+  if (banner.hidden) return;
+  banner.innerHTML = `<span><b>Version ${esc(s.update.version)} is available</b> (you have ${esc(s.version)}).
+    ${release ? `${release}What's new</a> · ` : ''}update with <code>docker compose pull &amp;&amp; docker compose up -d</code></span>
+    <button type="button">Dismiss</button>`;
+  banner.querySelector('button').onclick = () => {
+    store.set('update-dismissed', s.update.version);
+    banner.hidden = true;
+  };
 }
 
 function navItem({ cls = '', icon, label, count, scope, menu = '', attrs = '' }) {

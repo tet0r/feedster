@@ -15,6 +15,8 @@ services:
       FEEDSTER_PASSWORD: ${FEEDSTER_PASSWORD:-}
       FEEDSTER_REFRESH_MINUTES: ${FEEDSTER_REFRESH_MINUTES:-15}
       FEEDSTER_RETENTION_DAYS: ${FEEDSTER_RETENTION_DAYS:-90}
+      # Check GitHub every 5 minutes for a newer release and show a banner.
+      UPDATE_CHECK: ${UPDATE_CHECK:-true}
       TZ: ${TZ:-UTC}
     volumes:
       - feedster-data:/data

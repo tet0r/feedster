@@ -50,7 +50,20 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS articles_pub ON articles (published DESC, id DESC);
   CREATE INDEX IF NOT EXISTS articles_unread ON articles (read, feed_id);
   CREATE INDEX IF NOT EXISTS articles_starred ON articles (starred) WHERE starred = 1;
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  );
 `);
+
+export function getSetting(key) {
+  return db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value ?? null;
+}
+
+export function setSetting(key, value) {
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value').run(key, value);
+}
 
 export function tx(fn) {
   db.exec('BEGIN');

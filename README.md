@@ -31,6 +31,12 @@ The database lives in the `feedster-data` volume. To use a host folder instead, 
 `feedster-data:/data` with e.g. `./data:/data` and make it writable by the container user
 (`sudo chown 1000:1000 ./data`).
 
+## Versions and updates
+
+The running version is shown at the bottom of the sidebar. Every 5 minutes Feedster asks GitHub whether a newer release exists; when one does, a banner appears within a minute, without reloading the page, and a line is written to the container log. Set `UPDATE_CHECK=false` to turn this off. To stay on a specific release, use an image tag such as `ghcr.io/tet0r/feedster:1.0.0` (or `:1.0` for patch updates only) instead of `:latest`.
+
+Releases are cut by changing the number in the `VERSION` file: the first push to `main` with a new number publishes that image tag and a GitHub release. Changes are listed in [CHANGELOG.md](CHANGELOG.md); a version's section there becomes its release notes.
+
 ## Configuration
 
 | Variable | Default | Meaning |
@@ -40,6 +46,7 @@ The database lives in the `feedster-data` volume. To use a host folder instead, 
 | `FEEDSTER_DATA` | `./data` | Folder for the SQLite database |
 | `FEEDSTER_REFRESH_MINUTES` | `15` | How often all feeds are re-fetched (`0` disables) |
 | `FEEDSTER_RETENTION_DAYS` | `90` | Read, unstarred articles older than this are deleted (`0` keeps all) |
+| `UPDATE_CHECK` | `true` | Check GitHub for a newer release every 5 minutes. `false` makes no outside calls for this |
 
 ## Features
 
