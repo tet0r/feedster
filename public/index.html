@@ -23,6 +23,7 @@
         <button class="link" id="settingsBtn">Settings</button>
       </div>
       <div class="version" id="version"></div>
+      <div class="splitter" data-split="sidebar" role="separator" aria-orientation="vertical" aria-label="Resize the sidebar" tabindex="0" title="Drag to resize, double-click to reset"></div>
     </aside>
 
     <section class="list-pane" id="listPane">
@@ -51,6 +52,7 @@
         <input type="search" id="search" placeholder="Search articles  /">
       </div>
       <div class="articles" id="articles"></div>
+      <div class="splitter" data-split="list" role="separator" aria-orientation="vertical" aria-label="Resize the article list" tabindex="0" title="Drag to resize, double-click to reset"></div>
     </section>
 
     <main class="reader" id="reader">
@@ -58,7 +60,7 @@
         <p>Select an article to read it.</p>
         <p class="muted keys">
           <kbd>j</kbd>/<kbd>k</kbd> next/prev · <kbd>s</kbd> star · <kbd>m</kbd> read/unread ·
-          <kbd>v</kbd> open original · <kbd>r</kbd> refresh · <kbd>Shift</kbd>+<kbd>A</kbd> mark all read · <kbd>/</kbd> search
+          <kbd>v</kbd> open original · <kbd>f</kbd> full article · <kbd>r</kbd> refresh · <kbd>Shift</kbd>+<kbd>A</kbd> mark all read · <kbd>/</kbd> search
         </p>
       </div>
       <article class="reader-article" id="readerArticle" hidden></article>

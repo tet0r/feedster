@@ -7,6 +7,7 @@ import { db } from './db.js';
 import { subscribe, refreshAll, isRefreshing, exportOpml, importOpml } from './feeds.js';
 import { VERSION, availableUpdate, startUpdateChecker } from './updates.js';
 import { getIcon } from './icons.js';
+import { fullArticle } from './fulltext.js';
 import { send, readBody } from './http.js';
 import { syncStatus, setSyncCredentials } from './sync.js';
 import { handleFever } from './fever.js';
@@ -62,7 +63,7 @@ function scopeWhere({ feed, folder, view, q }) {
 function state() {
   const folders = db.prepare('SELECT * FROM folders ORDER BY position, name COLLATE NOCASE').all();
   const feeds = db.prepare(`
-    SELECT f.id, f.title, f.url, f.site_url, f.folder_id, f.last_fetched, f.last_error,
+    SELECT f.id, f.title, f.url, f.site_url, f.folder_id, f.last_fetched, f.last_error, f.next_fetch_at,
       (SELECT COUNT(*) FROM articles a WHERE a.feed_id = f.id AND a.read = 0) AS unread,
       (SELECT checked_at FROM icons i WHERE i.feed_id = f.id AND i.data IS NOT NULL) AS icon
     FROM feeds f ORDER BY f.title COLLATE NOCASE`).all();
@@ -107,6 +108,11 @@ const routes = [
   ['GET', /^\/api\/articles\/(\d+)$/, (_req, m) => {
     const a = db.prepare(`SELECT a.*, f.title AS feed_title, f.site_url FROM articles a JOIN feeds f ON f.id = a.feed_id WHERE a.id = ?`).get(Number(m[1]));
     return a || [404, { error: 'Not found' }];
+  }],
+
+  ['GET', /^\/api\/articles\/(\d+)\/full$/, async (_req, m) => {
+    const result = await fullArticle(Number(m[1]));
+    return result || [404, { error: 'Not found' }];
   }],
 
   ['PATCH', /^\/api\/articles\/(\d+)$/, async (req, m) => {

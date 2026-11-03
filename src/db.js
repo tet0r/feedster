@@ -63,11 +63,28 @@ db.exec(`
     checked_at INTEGER NOT NULL
   );
 
+  -- Full article text fetched from the article's page; error is set when extraction failed
+  CREATE TABLE IF NOT EXISTS fulltext (
+    article_id INTEGER PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+    content TEXT,
+    error TEXT,
+    fetched_at INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
   );
 `);
+
+// Columns added after the first release; databases created earlier get them here.
+function addColumn(table, column, definition) {
+  const exists = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  if (!exists) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+// Failed refreshes in a row, and when to try the feed again (see refreshFeed).
+addColumn('feeds', 'fail_count', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('feeds', 'next_fetch_at', 'INTEGER');
 
 export function getSetting(key) {
   return db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value ?? null;

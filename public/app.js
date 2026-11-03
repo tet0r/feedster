@@ -51,6 +51,11 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const feedById = (id) => S.feeds.find((f) => f.id === id);
 const folderById = (id) => S.folders.find((f) => f.id === id);
 
+function timeUntil(ts) {
+  const m = Math.max(1, Math.round((ts - Date.now()) / 60_000));
+  return m < 60 ? `${m}m` : `${Math.round(m / 60)}h`;
+}
+
 function timeAgo(ts) {
   const s = (Date.now() - ts) / 1000;
   if (s < 60) return 'now';
@@ -459,6 +464,7 @@ $('#articles').addEventListener('click', (e) => {
     if (act.dataset.act === 'star') toggleStar(i);
     if (act.dataset.act === 'read') toggleRead(i);
     if (act.dataset.act === 'open') openOriginal(i);
+    if (act.dataset.act === 'fulltext') toggleFull(i);
     return;
   }
   if (S.layout === 'cards') {
@@ -528,15 +534,86 @@ function headlineOnly(a) {
     ${host ? `<p><a class="btn" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">Read the full article on ${esc(host)} ↗</a></p>` : ''}`;
 }
 
+// ---- full articles: fetched from the article's page by the server (see fulltext.js)
+
+// Feeds with less text than this are treated as summaries and open the full article.
+const SUMMARY_CHARS = 1500;
+const fullTextPrefs = store.get('fullText', {});
+const textLength = (html) => (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().length;
+
+/** Whether to show the full article: the reader's choice for this feed, else only for summary feeds. */
+function wantsFull(a) {
+  const pref = fullTextPrefs[a.feed_id];
+  if (pref) return pref === 'full' && Boolean(a.url);
+  return Boolean(a.url) && textLength(a.content) < SUMMARY_CHARS;
+}
+
+async function loadFull(a) {
+  if (a.fullContent || a.fullError || a.fullLoading) return;
+  a.fullLoading = true;
+  try {
+    const r = await api(`/api/articles/${a.id}/full`);
+    if (r.content) a.fullContent = r.content;
+    else a.fullError = r.error || 'not available';
+  } catch (err) {
+    a.fullError = err.message;
+  }
+  a.fullLoading = false;
+}
+
+/** Re-draw one article where it is shown: the reading pane, or its card. */
+function rerenderArticle(i) {
+  const a = S.items[i];
+  if (!a) return;
+  if (S.layout === 'cards') {
+    const el = $(`#articles [data-i="${i}"]`);
+    if (el) el.innerHTML = articleHtml(a);
+  } else if (i === S.selected) {
+    $('#readerArticle').innerHTML = articleInner(a, { full: true });
+  }
+}
+
+async function showFullIfWanted(i) {
+  const a = S.items[i];
+  if (a?.view !== 'full' || a.fullContent || a.fullError) return;
+  const pending = loadFull(a);
+  rerenderArticle(i); // shows "Loading the full article…"
+  await pending;
+  if (S.items[i] === a) rerenderArticle(i);
+}
+
+function toggleFull(i) {
+  const a = S.items[i];
+  if (!a?.url) return;
+  a.view = a.view === 'full' ? 'feed' : 'full';
+  fullTextPrefs[a.feed_id] = a.view;
+  store.set('fullText', fullTextPrefs);
+  toast(a.view === 'full' ? `Showing full articles for ${a.feed_title}` : `Showing the feed's text for ${a.feed_title}`);
+  rerenderArticle(i);
+  showFullIfWanted(i);
+}
+
 function articleInner(a, { full = false } = {}) {
   const content = a.content ?? '';
-  const body = content.trim() ? sanitize(content, a.url || a.site_url) : headlineOnly(a);
-  const hasImage = a.image && !content.includes(a.image.split('?')[0].split('/').pop());
+  const showFull = a.view === 'full';
+  let body;
+  let shown = content;
+  if (showFull && a.fullContent) {
+    body = sanitize(a.fullContent, a.url);
+    shown = a.fullContent;
+  } else {
+    body = content.trim() ? sanitize(content, a.url || a.site_url) : headlineOnly(a);
+    if (showFull && a.fullLoading) body = `<p class="ra-status">Loading the full article…</p>${content.trim() ? body : ''}`;
+    if (showFull && a.fullError) body = `<p class="ra-status">Couldn't load the full article (${esc(a.fullError)}). Showing the feed's text.</p>${body}`;
+  }
+  const hasImage = a.image && !shown.includes(a.image.split('?')[0].split('/').pop());
   const date = new Date(a.published);
   return `
     <div class="ra-top">
       ${full ? '<button class="icon-btn mobile-only" data-act="back" title="Back">←</button>' : ''}
       <a class="src" href="#" data-feed-link="${a.feed_id}">${esc(a.feed_title)}</a>
+      ${a.url ? `<button class="text-btn ${showFull ? 'on' : ''}" data-act="fulltext" aria-pressed="${showFull}"
+        title="${showFull ? "Show the feed's text" : 'Show the full article from the website'} (f)">Full article</button>` : ''}
       <button class="icon-btn ${a.starred ? 'on' : ''}" data-act="star" title="Star (s)">${a.starred ? '★' : '☆'}</button>
       <button class="icon-btn" data-act="read" title="${a.read ? 'Mark as unread' : 'Mark as read'} (m)">◐</button>
       ${a.url ? '<button class="icon-btn" data-act="open" title="Open original (v)">↗</button>' : ''}
@@ -566,15 +643,16 @@ async function select(i, { scroll = true } = {}) {
   if (i > S.items.length - 6) loadMore();
   if (S.layout === 'cards') return;
 
-  const full = a.content != null ? a : await api(`/api/articles/${a.id}`);
+  if (a.content == null) a.content = (await api(`/api/articles/${a.id}`)).content;
   if (S.items[S.selected]?.id !== a.id) return;
-  a.content = full.content;
+  a.view ??= wantsFull(a) ? 'full' : 'feed';
   const reader = $('#readerArticle');
-  reader.innerHTML = articleInner({ ...a, ...full, read: a.read, starred: a.starred }, { full: true });
+  reader.innerHTML = articleInner(a, { full: true });
   reader.hidden = false;
   $('#readerEmpty').hidden = true;
   $('#reader').scrollTop = 0;
   $('#app').classList.add('reading');
+  showFullIfWanted(i);
 }
 
 $('#reader').addEventListener('click', (e) => {
@@ -585,6 +663,7 @@ $('#reader').addEventListener('click', (e) => {
     if (act.dataset.act === 'star') toggleStar(S.selected);
     if (act.dataset.act === 'read') toggleRead(S.selected);
     if (act.dataset.act === 'open') openOriginal(S.selected);
+    if (act.dataset.act === 'fulltext') toggleFull(S.selected);
   }
 });
 
@@ -704,6 +783,7 @@ $('#layoutSeg').addEventListener('click', (e) => {
   S.layout = l;
   store.set('layout', l);
   renderHeader();
+  applyPaneWidths();
   loadArticles({ keepSelection: true });
 });
 
@@ -801,7 +881,7 @@ $('#settingsBtn').addEventListener('click', () => {
   const feeds = [...S.feeds].sort((a, b) => Boolean(b.last_error) - Boolean(a.last_error));
   $('#feedHealth').innerHTML = feeds.length
     ? feeds.map((f) => `<div><span title="${esc(f.url)}">${esc(f.title)}</span>${f.last_error
-      ? `<span class="bad" title="${esc(f.last_error)}">${esc(f.last_error.slice(0, 40))}</span>`
+      ? `<span class="bad" title="${esc(f.last_error)}">${esc(f.last_error.slice(0, 40))}${f.next_fetch_at > Date.now() ? ` · retry in ${timeUntil(f.next_fetch_at)}` : ''}</span>`
       : `<span class="muted">${f.last_fetched ? `updated ${timeAgo(f.last_fetched)} ago` : 'pending'}</span>`}</div>`).join('')
     : '<p class="muted">No feeds yet.</p>';
   $('#settingsDialog').showModal();
@@ -874,6 +954,7 @@ document.addEventListener('keydown', (e) => {
     case 's': toggleStar(i); break;
     case 'm': toggleRead(i); break;
     case 'v': case 'o': openOriginal(i); break;
+    case 'f': toggleFull(i); break;
     case 'r': refresh(); break;
     case 'A': markAllRead(); break;
     case 'a': openAddDialog(); break;
@@ -884,8 +965,75 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault();
 });
 
+// ---------------------------------------------------------------- resizable panes
+
+const PANE_LIMITS = { sidebar: [180, 420], list: [260, 900] };
+const READER_MIN = 360;
+const paneWidths = store.get('paneWidths', {});
+const paneEl = { sidebar: () => $('#sidebar'), list: () => $('#listPane') };
+const paneVar = { sidebar: '--sidebar-w', list: '--list-w' };
+
+/** Keep a pane within its limits and leave the reading pane (or cards) at least READER_MIN wide. */
+function clampPane(key, width) {
+  const [min, max] = PANE_LIMITS[key];
+  const other = key === 'sidebar'
+    ? (S.layout === 'cards' ? 0 : paneEl.list().getBoundingClientRect().width)
+    : paneEl.sidebar().getBoundingClientRect().width;
+  const room = window.innerWidth - other - READER_MIN;
+  return Math.round(Math.max(min, Math.min(max, width, room)));
+}
+
+function applyPaneWidths() {
+  for (const key of Object.keys(paneVar)) {
+    if (paneWidths[key]) $('#app').style.setProperty(paneVar[key], `${clampPane(key, paneWidths[key])}px`);
+    else $('#app').style.removeProperty(paneVar[key]);
+  }
+}
+
+function setPaneWidth(key, width) {
+  paneWidths[key] = clampPane(key, width);
+  $('#app').style.setProperty(paneVar[key], `${paneWidths[key]}px`);
+}
+
+for (const handle of document.querySelectorAll('.splitter')) {
+  const key = handle.dataset.split;
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    handle.classList.add('dragging');
+    document.body.classList.add('resizing');
+    const startX = e.clientX;
+    const startWidth = paneEl[key]().getBoundingClientRect().width;
+    const move = (ev) => setPaneWidth(key, startWidth + ev.clientX - startX);
+    const done = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.classList.remove('dragging');
+      document.body.classList.remove('resizing');
+      store.set('paneWidths', paneWidths);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', done, { once: true });
+    handle.addEventListener('pointercancel', done, { once: true });
+  });
+  handle.addEventListener('dblclick', () => {
+    delete paneWidths[key];
+    store.set('paneWidths', paneWidths);
+    applyPaneWidths();
+  });
+  handle.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    e.stopPropagation();
+    setPaneWidth(key, paneEl[key]().getBoundingClientRect().width + (e.key === 'ArrowRight' ? 24 : -24));
+    store.set('paneWidths', paneWidths);
+  });
+}
+window.addEventListener('resize', applyPaneWidths);
+
 // ---------------------------------------------------------------- boot
 
 applyTheme();
 renderHeader();
+applyPaneWidths();
 reloadAll().catch((err) => toast(err.message));

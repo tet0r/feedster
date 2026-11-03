@@ -1,6 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
-import { db, tx } from './db.js';
+import { db, tx, getSetting, setSetting } from './db.js';
 import { updateIcon, iconDue } from './icons.js';
+import { isBlocked, retryAfterMs } from './net.js';
 
 const USER_AGENT = 'Feedster/1.0 (+self-hosted feed reader)';
 const FETCH_TIMEOUT_MS = 20_000;
@@ -51,6 +52,32 @@ function stripTags(html) {
   return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+const NAMED_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', hellip: '…', mdash: '—', ndash: '–',
+  lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', laquo: '«', raquo: '»', copy: '©', reg: '®', trade: '™',
+  deg: '°', eacute: 'é', egrave: 'è', aacute: 'á', oacute: 'ó', uacute: 'ú', iacute: 'í', ntilde: 'ñ', uuml: 'ü', ouml: 'ö', auml: 'ä',
+};
+
+export function decodeEntities(s) {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+    if (e[0] === '#') {
+      const code = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : Number(e.slice(1));
+      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m;
+    }
+    return NAMED_ENTITIES[e.toLowerCase()] ?? m;
+  });
+}
+
+/**
+ * Titles and names are plain text, but many feeds escape them twice ("Tom &amp;amp; Jerry",
+ * "Women&amp;#039;s") or wrap them in tags. Strip tags first, then decode, so "&lt;div&gt;" survives.
+ */
+export function plainText(v) {
+  const s = text(v);
+  if (!/[<&]/.test(s)) return s;
+  return decodeEntities(/<\/?[a-z][^>]*>/i.test(s) ? stripTags(s) : s).replace(/\s+/g, ' ').trim();
+}
+
 function firstImage(html, base) {
   const m = html && html.match(/<img[^>]+src=["']([^"']+)["']/i);
   return m ? resolveUrl(m[1], base) : null;
@@ -88,7 +115,7 @@ export function parseFeed(body, feedUrl) {
     const f = doc.feed;
     const siteUrl = resolveUrl(atomLink(f.link), feedUrl);
     return {
-      title: text(f.title),
+      title: plainText(f.title),
       siteUrl,
       icon: resolveUrl(text(f.icon) || text(f.logo), feedUrl),
       items: asArray(f.entry).map((e) => {
@@ -97,8 +124,8 @@ export function parseFeed(body, feedUrl) {
         return {
           guid: text(e.id) || url || text(e.title),
           url,
-          title: text(e.title),
-          author: text(e.author?.name ?? e.author),
+          title: plainText(e.title),
+          author: plainText(e.author?.name ?? e.author),
           content,
           image: mediaImage(e) || firstImage(content, url),
           published: toTime(e.published) ?? toTime(e.updated),
@@ -114,7 +141,7 @@ export function parseFeed(body, feedUrl) {
 
   const image = asArray(channel.image)[0] || asArray(doc['rdf:RDF']?.image)[0];
   return {
-    title: text(channel.title),
+    title: plainText(channel.title),
     siteUrl,
     icon: image ? resolveUrl(text(image.url) || image['@_rdf:resource'] || image['@_rdf:about'] || '', feedUrl) : null,
     items: rawItems.map((i) => {
@@ -123,8 +150,8 @@ export function parseFeed(body, feedUrl) {
       return {
         guid: text(i.guid) || url || text(i.title),
         url,
-        title: text(i.title),
-        author: text(i['dc:creator']) || text(i.author),
+        title: plainText(i.title),
+        author: plainText(i['dc:creator']) || plainText(i.author),
         content,
         image: mediaImage(i) || firstImage(content, url),
         published: toTime(i.pubDate) ?? toTime(i['dc:date']),
@@ -135,14 +162,14 @@ export function parseFeed(body, feedUrl) {
 
 function parseJsonFeed(j, feedUrl) {
   return {
-    title: j.title || '',
+    title: plainText(j.title),
     siteUrl: resolveUrl(j.home_page_url, feedUrl),
     icon: resolveUrl(j.favicon || j.icon, feedUrl),
     items: asArray(j.items).map((i) => ({
       guid: String(i.id ?? i.url),
       url: resolveUrl(i.url, feedUrl),
-      title: i.title || '',
-      author: i.authors?.[0]?.name || i.author?.name || '',
+      title: plainText(i.title),
+      author: plainText(i.authors?.[0]?.name || i.author?.name),
       content: i.content_html || (i.content_text ? `<p>${escapeHtml(i.content_text)}</p>` : '') || i.summary || '',
       image: i.image || i.banner_image || null,
       published: toTime(i.date_published) ?? toTime(i.date_modified),
@@ -202,9 +229,18 @@ function guessedFeeds(pageUrl) {
   return paths.map((p) => new URL(p, u.origin).href);
 }
 
+// Probing many addresses at once looks like an attack to bot protection, so go a few at a time.
+const PROBE_BATCH = 3;
+
+const blockedMessage = (host) => `${host} asked for a browser check (bot protection such as Cloudflare), which feed readers can't complete. Feedster will retry less often until it clears, which it usually does on its own.`;
+
 async function fetchFeed(url) {
   try {
     const res = await httpGet(url);
+    if (isBlocked(res)) {
+      res.body?.cancel().catch(() => {});
+      return { blocked: true };
+    }
     if (!res.ok) return null;
     const body = await res.text();
     return looksLikeFeed(body) ? { url: res.url || url, body } : null;
@@ -213,13 +249,14 @@ async function fetchFeed(url) {
   }
 }
 
-/** First candidate (in order) that turns out to be a feed; all are fetched at once. */
+/** The first candidate (in order) that is a feed, a few at a time; { blocked } once the site starts refusing. */
 async function firstFeed(candidates) {
   const unique = [...new Set(candidates)];
-  const results = unique.map(fetchFeed);
-  for (const r of results) {
-    const hit = await r;
+  for (let i = 0; i < unique.length; i += PROBE_BATCH) {
+    const results = await Promise.all(unique.slice(i, i + PROBE_BATCH).map(fetchFeed));
+    const hit = results.find((r) => r?.body);
     if (hit) return hit;
+    if (results.some((r) => r?.blocked)) return { blocked: true };
   }
   return null;
 }
@@ -236,21 +273,28 @@ export async function discover(inputUrl) {
 
   let page = null;
   let status = null;
+  let blocked = false;
   try {
     const res = await httpGet(url);
     status = res.status;
+    blocked = isBlocked(res);
     if (res.ok) page = { url: res.url || url, body: await res.text() };
+    else res.body?.cancel().catch(() => {});
   } catch (err) {
     throw new Error(`Couldn't reach ${host} (${err.cause?.code || err.message})`);
   }
   if (page && looksLikeFeed(page.body)) return page;
 
-  // A site may refuse its homepage to feed readers but still serve its feed, so keep looking.
+  // A site may refuse its homepage to feed readers but still serve its feed (Medium does), so keep
+  // looking, but stop as soon as a feed address is refused too.
   const base = page?.url || url;
-  const hit = (page && await firstFeed(feedLinks(page.body, base)))
-    || await firstFeed([...(knownFeed(base) ? [knownFeed(base)] : []), ...guessedFeeds(base)]);
-  if (hit) return hit;
+  for (const candidates of [page ? feedLinks(page.body, base) : [], [...(knownFeed(base) ? [knownFeed(base)] : []), ...guessedFeeds(base)]]) {
+    const hit = await firstFeed(candidates);
+    if (hit?.body) return hit;
+    if (hit?.blocked) { blocked = true; break; }
+  }
 
+  if (blocked) throw new Error(blockedMessage(host));
   if (status === 401 || status === 403 || status === 429) {
     throw new Error(`${host} blocks feed readers (HTTP ${status}) and no feed was found. If the site has a feed, paste its address instead.`);
   }
@@ -301,6 +345,28 @@ export async function subscribe(inputUrl, folderId = null) {
   return { id, existed: false };
 }
 
+const REFRESH_MS = (Number(process.env.FEEDSTER_REFRESH_MINUTES) || 15) * 60_000;
+const MAX_BACKOFF_MS = 24 * 3_600_000;
+
+class FetchError extends Error {
+  constructor(message, { blocked = false, retryAfter = null } = {}) {
+    super(message);
+    this.blocked = blocked;
+    this.retryAfter = retryAfter;
+  }
+}
+
+/**
+ * How long to leave a failing feed alone. Retrying a site that is refusing us on schedule keeps
+ * us flagged, so the wait doubles with each failure: from one refresh interval, or from an hour
+ * when the site showed a bot check or rate limit, up to a day. A site's Retry-After is honored.
+ */
+function backoffMs(failCount, { blocked, retryAfter }) {
+  const base = blocked ? Math.max(3_600_000, REFRESH_MS) : REFRESH_MS;
+  const delay = Math.min(base * 2 ** (failCount - 1), MAX_BACKOFF_MS);
+  return Math.min(Math.max(delay, retryAfter ?? 0), MAX_BACKOFF_MS);
+}
+
 export async function refreshFeed(feed) {
   try {
     // When the icon needs looking up, fetch the whole feed (not "304 Not Modified") to read its image.
@@ -309,19 +375,27 @@ export async function refreshFeed(feed) {
     if (feed.etag && !needIcon) headers['If-None-Match'] = feed.etag;
     if (feed.last_modified && !needIcon) headers['If-Modified-Since'] = feed.last_modified;
     const res = await httpGet(feed.url, headers);
+    if (isBlocked(res)) {
+      res.body?.cancel().catch(() => {});
+      throw new FetchError(blockedMessage(new URL(feed.url).hostname), { blocked: true, retryAfter: retryAfterMs(res) });
+    }
     if (res.status === 304) {
-      db.prepare('UPDATE feeds SET last_fetched = ?, last_error = NULL WHERE id = ?').run(Date.now(), feed.id);
+      db.prepare('UPDATE feeds SET last_fetched = ?, last_error = NULL, fail_count = 0, next_fetch_at = NULL WHERE id = ?').run(Date.now(), feed.id);
       return 0;
     }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new FetchError(`HTTP ${res.status}`, { retryAfter: retryAfterMs(res) });
     const parsed = parseFeed(await res.text(), feed.url);
     const added = storeItems(feed.id, parsed.items);
-    db.prepare('UPDATE feeds SET etag = ?, last_modified = ?, last_fetched = ?, last_error = NULL, site_url = COALESCE(site_url, ?) WHERE id = ?')
+    db.prepare(`UPDATE feeds SET etag = ?, last_modified = ?, last_fetched = ?, last_error = NULL, fail_count = 0, next_fetch_at = NULL,
+      site_url = COALESCE(site_url, ?) WHERE id = ?`)
       .run(res.headers.get('etag'), res.headers.get('last-modified'), Date.now(), parsed.siteUrl, feed.id);
     if (needIcon) await updateIcon({ ...feed, site_url: feed.site_url || parsed.siteUrl }, parsed.icon).catch(() => {});
     return added;
   } catch (err) {
-    db.prepare('UPDATE feeds SET last_fetched = ?, last_error = ? WHERE id = ?').run(Date.now(), String(err.message || err), feed.id);
+    const fails = (feed.fail_count || 0) + 1;
+    const message = err.name === 'TimeoutError' ? 'The site took too long to respond' : String(err.message || err);
+    db.prepare('UPDATE feeds SET last_fetched = ?, last_error = ?, fail_count = ?, next_fetch_at = ? WHERE id = ?')
+      .run(Date.now(), message, fails, Date.now() + backoffMs(fails, err), feed.id);
     return 0;
   }
 }
@@ -336,7 +410,8 @@ export function refreshAll(feedId = null) {
   }
   if (refreshing) return refreshing;
   refreshing = (async () => {
-    const queue = db.prepare('SELECT * FROM feeds').all();
+    // Feeds that are backing off after failures wait their turn (a manual refresh of one feed doesn't).
+    const queue = db.prepare('SELECT * FROM feeds WHERE next_fetch_at IS NULL OR next_fetch_at <= ?').all(Date.now());
     let added = 0;
     const worker = async () => {
       while (queue.length) added += await refreshFeed(queue.shift());
@@ -351,6 +426,22 @@ export function refreshAll(feedId = null) {
 export function isRefreshing() {
   return Boolean(refreshing);
 }
+
+/** One-time fix for titles stored before they were decoded (1.3.0). Refreshes fix the rest. */
+function cleanStoredTitles() {
+  if (getSetting('titles_cleaned') === '1') return;
+  tx(() => {
+    for (const table of ['articles', 'feeds']) {
+      const fix = db.prepare(`UPDATE ${table} SET title = ? WHERE id = ?`);
+      for (const row of db.prepare(`SELECT id, title FROM ${table} WHERE title LIKE '%&%;%' OR title LIKE '%<%>%'`).all()) {
+        const clean = plainText(row.title);
+        if (clean && clean !== row.title) fix.run(clean, row.id);
+      }
+    }
+    setSetting('titles_cleaned', '1');
+  });
+}
+cleanStoredTitles();
 
 /** Drop read, unstarred articles past the retention window. */
 function pruneOld() {

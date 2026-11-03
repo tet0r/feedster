@@ -63,13 +63,32 @@ a { color: var(--accent); }
 [hidden] { display: none !important; }
 
 /* ---- layout ---- */
+/* Pane widths are variables so the dividers (and saved widths) can set them. */
 .app {
+  --sidebar-w: 260px;
+  --list-w: 400px;
   display: grid;
-  grid-template-columns: 260px minmax(320px, 420px) 1fr;
+  grid-template-columns: var(--sidebar-w) var(--list-w) minmax(0, 1fr);
   height: 100vh;
   height: 100dvh;
 }
-.app.layout-cards { grid-template-columns: 260px 1fr; }
+.app.layout-cards { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+
+/* ---- draggable dividers ---- */
+.sidebar, .list-pane { position: relative; min-width: 0; }
+.splitter {
+  position: absolute; top: 0; bottom: 0; right: -4px; width: 8px; z-index: 5;
+  cursor: col-resize; touch-action: none;
+}
+.splitter::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px;
+  background: transparent; transition: background .15s;
+}
+.splitter:hover::after, .splitter.dragging::after, .splitter:focus-visible::after { background: var(--accent); }
+.splitter:focus-visible { outline: none; }
+.layout-cards .list-pane .splitter { display: none; }
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing iframe { pointer-events: none; }
 .app.layout-cards .reader { display: none; }
 
 /* ---- sidebar ---- */
@@ -207,6 +226,16 @@ kbd { font: 11px ui-monospace, monospace; padding: 1px 5px; border: 1px solid va
 .ra-top { display: flex; align-items: center; gap: 4px; margin-bottom: 14px; }
 .ra-top .src { flex: 1; color: var(--accent); font-weight: 550; font-size: 13px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ra-top .icon-btn.on { color: var(--star); }
+.text-btn {
+  border: 1px solid var(--border); background: var(--bg); color: var(--text-soft);
+  border-radius: 6px; padding: 3px 10px; font-size: 12px; font-weight: 550; margin-right: 4px; flex: none;
+}
+.text-btn:hover { background: var(--bg-hover); color: var(--text); }
+.text-btn.on { background: var(--bg-active); border-color: var(--accent); color: var(--text); }
+.ra-status {
+  background: var(--bg-soft); border-radius: 6px; padding: 8px 12px;
+  font-size: 13.5px; line-height: 1.5; color: var(--text-soft);
+}
 .ra-title { margin: 0 0 8px; font-size: 26px; line-height: 1.25; letter-spacing: -.01em; }
 .card .ra-title { font-size: 21px; }
 .ra-title a { color: var(--text); text-decoration: none; }
@@ -275,12 +304,12 @@ body.login button { padding: 8px; border: 0; border-radius: 6px; background: var
 /* ---- responsive ---- */
 .mobile-only { display: none; }
 @media (max-width: 1100px) {
-  .app { grid-template-columns: 220px minmax(280px, 360px) 1fr; }
-  .app.layout-cards { grid-template-columns: 220px 1fr; }
+  .app { --sidebar-w: 220px; --list-w: 340px; }
 }
 @media (max-width: 800px) {
   .app, .app.layout-cards { grid-template-columns: 1fr; }
   .mobile-only { display: inline-block; }
+  .splitter { display: none; }
   .sidebar {
     position: fixed; inset: 0 auto 0 0; width: 280px; z-index: 40;
     transform: translateX(-100%); transition: transform .2s ease; box-shadow: var(--shadow);

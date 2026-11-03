@@ -22,6 +22,15 @@ test('does not blow up on billion-laughs DOCTYPE entity bombs', () => {
   assert.ok(title.length < 1000);
 });
 
+test('decodes titles that feeds escaped twice', () => {
+  const items = '<item><guid>a</guid><title><![CDATA[Amosa Auto-Tighten &amp; Manual &#039;Twist&#039; 14&quot;]]></title><dc:creator>O&amp;#039;Brien</dc:creator></item>'
+    + '<item><guid>b</guid><title>Use &amp;lt;div&amp;gt; tags at AT&amp;T</title></item>';
+  const feed = parseFeed(rss(items), 'https://example.com/feed');
+  assert.equal(feed.items[0].title, `Amosa Auto-Tighten & Manual 'Twist' 14"`);
+  assert.equal(feed.items[0].author, "O'Brien");
+  assert.equal(feed.items[1].title, 'Use <div> tags at AT&T');
+});
+
 test('reads non-standard item images such as the <image href> MLB uses', () => {
   const items = `<item><guid>a</guid><title>A</title><link>https://example.com/a</link><image href="https://img.example.com/a.jpg"/></item>
     <item><guid>b</guid><title>B</title><link>https://example.com/b</link><itunes:image href="https://img.example.com/b.jpg"/></item>

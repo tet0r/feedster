@@ -11,8 +11,10 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
+    "@mozilla/readability": "^0.6.0",
     "dompurify": "^3.4.17",
-    "fast-xml-parser": "^4.5.7"
+    "fast-xml-parser": "^4.5.7",
+    "linkedom": "~0.18.13"
   },
   "engines": {
     "node": ">=22.13"

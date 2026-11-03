@@ -1,6 +1,5 @@
-import dns from 'node:dns/promises';
-import net from 'node:net';
 import { db } from './db.js';
+import { isPrivateHost, readHead, isBlocked } from './net.js';
 
 // Feed icons, looked up on the server and kept in the database:
 // the feed's own image first, then the website's favicon. With neither, the UI shows a letter.
@@ -12,6 +11,9 @@ const MISSING_TTL_MS = 3 * 86_400_000;
 // The site didn't answer (timeout, outage): that says nothing about its icon, so try again soon.
 const UNREACHABLE_TTL_MS = 3_600_000;
 const UNREACHABLE = 'unreachable';
+// The site answered with a bot check or rate limit: asking again soon would only make it worse.
+const BLOCKED_TTL_MS = 86_400_000;
+const BLOCKED = 'blocked';
 
 export function getIcon(feedId) {
   return db.prepare('SELECT data, type, checked_at FROM icons WHERE feed_id = ? AND data IS NOT NULL').get(feedId) || null;
@@ -21,7 +23,9 @@ export function getIcon(feedId) {
 export function iconDue(feedId) {
   const row = db.prepare('SELECT data IS NOT NULL AS found, source, checked_at FROM icons WHERE feed_id = ?').get(feedId);
   if (!row) return true;
-  const ttl = row.found ? FOUND_TTL_MS : row.source === UNREACHABLE ? UNREACHABLE_TTL_MS : MISSING_TTL_MS;
+  const ttl = row.found ? FOUND_TTL_MS
+    : row.source === UNREACHABLE ? UNREACHABLE_TTL_MS
+      : row.source === BLOCKED ? BLOCKED_TTL_MS : MISSING_TTL_MS;
   return Date.now() - row.checked_at > ttl;
 }
 
@@ -66,48 +70,12 @@ export function sniffImage(buf) {
   return null;
 }
 
-function isPrivateAddress(ip) {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split('.').map(Number);
-    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
-  }
-  const v6 = ip.toLowerCase();
-  if (v6.startsWith('::ffff:')) return isPrivateAddress(v6.slice(7));
-  return v6 === '::1' || v6 === '::' || v6.startsWith('fc') || v6.startsWith('fd') || v6.startsWith('fe80');
-}
-
-async function isPrivateHost(hostname) {
-  const host = hostname.replace(/^\[|\]$/g, '');
-  if (host === 'localhost' || host.endsWith('.localhost')) return true;
-  if (net.isIP(host)) return isPrivateAddress(host);
-  try {
-    return (await dns.lookup(host, { all: true })).some((a) => isPrivateAddress(a.address));
-  } catch {
-    return true; // unresolvable: don't try it
-  }
-}
-
 async function get(url, accept, timeoutMs = 10_000) {
   return fetch(url, {
     headers: { 'User-Agent': USER_AGENT, Accept: accept },
     redirect: 'follow',
     signal: AbortSignal.timeout(timeoutMs),
   });
-}
-
-/** The start of a response body, without downloading the rest. */
-async function readHead(res, limit) {
-  const chunks = [];
-  let size = 0;
-  const reader = res.body.getReader();
-  while (size < limit) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    size += value.length;
-  }
-  reader.cancel().catch(() => {});
-  return Buffer.concat(chunks).subarray(0, limit);
 }
 
 async function readLimited(res) {
@@ -127,6 +95,7 @@ async function fetchIcon(url, allowPrivate, { squareOnly = false } = {}) {
     if (!/^https?:$/.test(u.protocol)) return null;
     if (!allowPrivate && await isPrivateHost(u.hostname)) return null;
     const res = await get(url, 'image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5');
+    if (isBlocked(res)) return { blocked: true };
     if (!res.ok) return null;
     if (!allowPrivate && await isPrivateHost(new URL(res.url || url).hostname)) return null;
     const buf = await readLimited(res);
@@ -175,6 +144,7 @@ async function siteCandidates(siteUrl, allowPrivate) {
     // Home pages can be large and slow; give them longer than an icon gets.
     const res = await get(siteUrl, 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5', 20_000);
     reached = true;
+    if (isBlocked(res)) return { candidates, reached, blocked: true };
     if (res.ok && (res.headers.get('content-type') || '').includes('html')) {
       // Icon tags sit in <head>; no need to download all of a multi-megabyte home page.
       const html = (await readHead(res, 300_000)).toString('utf8');
@@ -192,23 +162,29 @@ async function siteCandidates(siteUrl, allowPrivate) {
 export async function updateIcon(feed, feedImage) {
   const siteUrl = feed.site_url || new URL(feed.url).origin;
   const allowPrivate = await isPrivateHost(new URL(feed.url).hostname);
-  let icon = feedImage ? await fetchIcon(feedImage, allowPrivate, { squareOnly: true }) : null;
+  let result = feedImage ? await fetchIcon(feedImage, allowPrivate, { squareOnly: true }) : null;
   let reached = true;
-  if (!icon) {
+  let blocked = Boolean(result?.blocked);
+  if (!result?.data && !blocked) {
     const site = await siteCandidates(siteUrl, allowPrivate);
     reached = site.reached;
-    for (const candidate of [...new Set(site.candidates)]) {
-      icon = await fetchIcon(candidate, allowPrivate);
-      if (icon) break;
+    blocked = Boolean(site.blocked);
+    // Stop at the first refusal: more requests to a site that is challenging us keep us flagged.
+    for (const candidate of blocked ? [] : [...new Set(site.candidates)]) {
+      result = await fetchIcon(candidate, allowPrivate);
+      if (result?.data || result?.blocked) break;
     }
+    blocked ||= Boolean(result?.blocked);
   }
-  // Keep an icon found earlier if this lookup only failed because the site was down.
-  if (!icon && !reached && getIcon(feed.id)) {
-    db.prepare('UPDATE icons SET checked_at = ? WHERE feed_id = ?').run(Date.now() - FOUND_TTL_MS + UNREACHABLE_TTL_MS, feed.id);
+  const icon = result?.data ? result : null;
+  // Keep an icon found earlier if this lookup only failed because the site was down or refusing.
+  if (!icon && (!reached || blocked) && getIcon(feed.id)) {
+    const ttl = blocked ? BLOCKED_TTL_MS : UNREACHABLE_TTL_MS;
+    db.prepare('UPDATE icons SET checked_at = ? WHERE feed_id = ?').run(Date.now() - FOUND_TTL_MS + ttl, feed.id);
     return true;
   }
   db.prepare(`INSERT INTO icons (feed_id, data, type, source, checked_at) VALUES (?, ?, ?, ?, ?)
     ON CONFLICT (feed_id) DO UPDATE SET data = excluded.data, type = excluded.type, source = excluded.source, checked_at = excluded.checked_at`)
-    .run(feed.id, icon?.data ?? null, icon?.type ?? null, icon?.source ?? (reached ? null : UNREACHABLE), Date.now());
+    .run(feed.id, icon?.data ?? null, icon?.type ?? null, icon?.source ?? (blocked ? BLOCKED : reached ? null : UNREACHABLE), Date.now());
   return Boolean(icon);
 }

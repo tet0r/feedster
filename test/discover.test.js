@@ -14,14 +14,21 @@ const PAGES = {
   '/blocked/feed': [200, 'application/rss+xml', FEED],
   '/walled/': [403, 'text/html', 'Forbidden'],
   '/plain/': [200, 'text/html', '<html>nothing</html>'],
+  // Like Medium: the page is behind a bot check but the feed is not.
+  '/medium/': [403, 'text/html', 'Just a moment...', { 'cf-mitigated': 'challenge', server: 'cloudflare' }],
+  '/medium/feed': [200, 'application/rss+xml', FEED],
 };
+// Paths under /challenged/ all answer with a Cloudflare bot check.
+const CHALLENGE = [403, 'text/html', 'Just a moment...', { 'cf-mitigated': 'challenge', server: 'cloudflare' }];
+let challengedHits = 0;
 let server;
 let base;
 
 before(async () => {
   server = http.createServer((req, res) => {
-    const [status, type, body] = PAGES[req.url] || [404, 'text/html', 'Not found'];
-    res.writeHead(status, { 'Content-Type': type });
+    if (req.url.startsWith('/challenged/')) challengedHits++;
+    const [status, type, body, headers] = PAGES[req.url] || (req.url.startsWith('/challenged/') ? CHALLENGE : [404, 'text/html', 'Not found']);
+    res.writeHead(status, { 'Content-Type': type, ...headers });
     res.end(body);
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -47,4 +54,15 @@ test('explains when a site blocks readers and has no reachable feed', async () =
 
 test('explains when a site has no feed', async () => {
   await assert.rejects(discover(`${base}/plain/`), /No feed found on 127\.0\.0\.1.*paste its address/);
+});
+
+test('finds the feed when only the page is behind a bot check', async () => {
+  assert.equal((await discover(`${base}/medium/`)).url, `${base}/medium/feed`);
+});
+
+test('stops probing as soon as a site answers with a bot check', async () => {
+  challengedHits = 0;
+  await assert.rejects(discover(`${base}/challenged/`), /asked for a browser check/);
+  // The page, then one batch of three guesses; not the dozen-plus addresses it could try.
+  assert.ok(challengedHits <= 4, `made ${challengedHits} requests`);
 });

@@ -4,6 +4,20 @@ All notable changes to Feedster are listed here, newest first. Version numbers f
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-03
+
+### Added
+
+- Full articles in the reading pane. When a feed only gives a summary, Feedster fetches the article's page and shows the main text, extracted with Readability (the engine behind Firefox's Reader View). A "Full article" button (or `f`) switches between the full article and the feed's text, and the choice is remembered per feed. Fetched articles are kept, so each page is only downloaded once.
+- Drag the dividers between the sidebar, the article list and the reading pane to resize them. Widths are remembered; double-click a divider to reset it, or use the arrow keys on a focused divider.
+
+### Fixed
+
+- Titles that feeds escape twice now read normally ("Jar Opener & Twist", "Women's") instead of showing `&amp;` and `&#039;`. Titles already stored are cleaned up once on upgrade.
+- Feeds behind bot protection such as Cloudflare (for example Techbargains) are handled gently. A bot check is reported in plain words instead of "HTTP 403", and a failing feed is retried less and less often (doubling from one refresh interval, or from an hour after a bot check or rate limit, up to a day, honoring Retry-After) instead of every 15 minutes, which kept such sites refusing. Settings → Feed health shows when it will be tried next.
+- Subscribing by website address checks candidate feed addresses three at a time and stops as soon as the site shows a bot check, rather than sending a burst of requests.
+- Icon lookups stop at the first bot check and wait a day before asking that site again.
+
 ## [1.2.0] - 2026-11-03
 
 ### Added

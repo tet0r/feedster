@@ -21,9 +21,17 @@ let dataDir;
 // A 16x16 PNG header: enough for Feedster to accept it as the feed's icon.
 const ICON = Buffer.concat([Buffer.from('89504e470d0a1a0a0000000d49484452000000100000001008060000001ff3ff61', 'hex'), Buffer.alloc(32)]);
 
+// The page each article links to: navigation and footer around a long article body.
+const ARTICLE_PAGE = `<!doctype html><html><head><title>Full story</title></head><body>
+  <nav><a href="/">Home</a> <a href="/about">About</a></nav>
+  <article><h1>Full story</h1>${'<p>This is the complete article text that the feed only summarised, with enough words to be the main content of the page.</p>'.repeat(12)}
+  <img src="/photo.jpg" alt="A photo"></article>
+  <footer>Copyright</footer></body></html>`;
+let articleHits = 0;
+
 // Relative links keep every request on the local test server.
 const rss = (n) => `<?xml version="1.0"?><rss version="2.0"><channel><title>Local Feed</title><link>/</link><image><url>/icon.png</url></image>${
-  Array.from({ length: n }, (_, i) => `<item><guid>item-${i}</guid><title>Post ${i}</title><link>http://example.com/${i}</link>
+  Array.from({ length: n }, (_, i) => `<item><guid>item-${i}</guid><title>Post ${i}</title><link>/article/${i}</link>
     <description>&lt;p&gt;Body ${i}&lt;/p&gt;</description><pubDate>${new Date(Date.UTC(2026, 0, 1 + i)).toUTCString()}</pubDate></item>`).join('')
 }</channel></rss>`;
 
@@ -56,6 +64,12 @@ async function fever(query, form = {}) {
 before(async () => {
   feedServer = http.createServer((req, res) => {
     if (req.url === '/icon.png') { res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(ICON); }
+    if (req.url.startsWith('/article/')) {
+      articleHits++;
+      if (req.url === '/article/0') { res.writeHead(404, { 'Content-Type': 'text/html' }); return res.end('<html>gone</html>'); }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(ARTICLE_PAGE);
+    }
     res.writeHead(200, { 'Content-Type': 'application/rss+xml' });
     res.end(rss(5));
   });
@@ -116,6 +130,21 @@ test('serves the icon the feed declares', async () => {
   assert.match(res.headers.get('content-security-policy'), /default-src 'none'/);
   assert.deepEqual(Buffer.from(await res.arrayBuffer()), ICON);
   assert.equal((await fetch(`${BASE}/api/feeds/999/icon`)).status, 404);
+});
+
+test('fetches the full article from the page, once, and explains failures', async () => {
+  const items = (await web('/api/articles?view=all&order=oldest')).items;
+  const post1 = items.find((a) => a.title === 'Post 1');
+  articleHits = 0;
+  const full = await web(`/api/articles/${post1.id}/full`);
+  assert.match(full.content, /complete article text/);
+  assert.doesNotMatch(full.content, /About|Copyright/, 'navigation and footer are left out');
+  assert.match(full.content, /src="http:\/\/127\.0\.0\.1:\d+\/photo\.jpg"/, 'image made absolute');
+  await web(`/api/articles/${post1.id}/full`);
+  assert.equal(articleHits, 1, 'second request is served from the cache');
+
+  const post0 = items.find((a) => a.title === 'Post 0');
+  assert.deepEqual(await web(`/api/articles/${post0.id}/full`), { error: 'the site returned HTTP 404' });
 });
 
 test('Google Reader: subscriptions, folders and unread counts', async () => {

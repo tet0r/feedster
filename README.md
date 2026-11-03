@@ -64,6 +64,9 @@ Releases are cut by changing the number in the `VERSION` file: the first push to
 - Subscribe by feed URL **or** website URL (feeds are auto-discovered from `<link rel="alternate">` and common paths)
 - RSS 2.0, RSS 1.0 (RDF), Atom and JSON Feed
 - Folders with drag-and-drop, rename, move, unsubscribe; per-feed error indicators
+- Full articles for summary-only feeds, extracted from the article page (toggle per feed)
+- Resizable sidebar, article list and reading pane
+- Failing feeds back off (up to a day) instead of hammering a site that is refusing them
 - Feed icons from the feed itself or the website's favicon, stored locally (a letter only when a site has none)
 - Unread / All views, Starred, full-text search across titles, content and authors
 - List + reading pane, or a card view that shows articles inline (optional mark-as-read on scroll)
@@ -81,6 +84,7 @@ Releases are cut by changing the number in the `VERSION` file: the first push to
 | `s` | Star / unstar |
 | `m` | Toggle read |
 | `v` | Open original |
+| `f` | Full article / feed text |
 | `r` | Refresh all feeds |
 | `Shift`+`A` | Mark all in current view as read |
 | `a` | Add subscription |

@@ -65,6 +65,10 @@ const ROUTES = {
 before(async () => {
   server = http.createServer((req, res) => {
     hits.push(req.url);
+    if (req.url.startsWith('/challenged/')) {
+      res.writeHead(403, { 'cf-mitigated': 'challenge', server: 'cloudflare', 'Content-Type': 'text/html' });
+      return res.end('Just a moment...');
+    }
     const route = ROUTES[req.url];
     // Like many sites, answer missing files with an HTML page rather than an image.
     if (!route) { res.writeHead(404, { 'Content-Type': 'text/html' }); return res.end('<html>Not found</html>'); }
@@ -130,4 +134,16 @@ test('a public feed cannot point Feedster at addresses on the local network', as
   const f = feed('/with-icons/', 'https://93.184.215.14/feed.xml');
   assert.equal(await updateIcon(f, `${base}/feed-image.png`), false);
   assert.deepEqual(hits, [], 'no request reached the local server');
+});
+
+test('a site behind a bot check is asked once, then left alone for a day', async () => {
+  hits.length = 0;
+  const f = feed('/challenged/');
+  assert.equal(await updateIcon(f, null), false);
+  assert.deepEqual(hits, ['/challenged/'], 'no favicon requests after the page was refused');
+  assert.equal(iconDue(f.id), false);
+  db.prepare('UPDATE icons SET checked_at = checked_at - 2 * 3600000 WHERE feed_id = ?').run(f.id);
+  assert.equal(iconDue(f.id), false, 'still waiting after two hours');
+  db.prepare('UPDATE icons SET checked_at = checked_at - 23 * 3600000 WHERE feed_id = ?').run(f.id);
+  assert.equal(iconDue(f.id), true, 'tried again after a day');
 });
