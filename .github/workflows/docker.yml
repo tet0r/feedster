@@ -23,9 +23,23 @@ jobs:
           cache: npm
 
       - name: Unit tests
+        id: tests
         run: |
           npm ci
-          npm test
+          node --test --test-concurrency=1 \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=tap --test-reporter-destination=test-results.tap \
+            test/*.test.js
+
+      # Annotations are visible on the run page without opening the logs
+      - name: Report test failures
+        if: failure() && steps.tests.outcome == 'failure'
+        run: |
+          grep -E -B2 -A25 '^ *not ok' test-results.tap | head -c 4000 > failures.txt || true
+          node -e '
+            const s = require("fs").readFileSync("failures.txt", "utf8").replace(/%/g, "%25").replace(/\r/g, "").replace(/\n/g, "%0A");
+            console.log("::error title=Unit tests failed::" + (s || "see the Unit tests step log"));
+          '
 
       # The VERSION file is the release number. A release is cut the first time
       # a given number reaches main; later pushes with the same number only refresh :latest.

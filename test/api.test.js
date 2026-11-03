@@ -59,9 +59,12 @@ before(async () => {
     env: { ...process.env, PORT: String(PORT), FEEDSTER_DATA: dataDir, FEEDSTER_REFRESH_MINUTES: '0', UPDATE_CHECK: 'false', FEEDSTER_PASSWORD: '' },
     stdio: 'ignore',
   });
-  for (let i = 0; i < 50; i++) {
-    try { await fetch(`${BASE}/api/state`); break; } catch { await new Promise((r) => setTimeout(r, 100)); }
+  // CI machines can be slow to start a process; wait up to 20s and fail clearly if it never comes up.
+  let up = false;
+  for (let i = 0; i < 200 && !up; i++) {
+    try { up = (await fetch(`${BASE}/api/state`)).ok; } catch { await new Promise((r) => setTimeout(r, 100)); }
   }
+  if (!up) throw new Error(`Feedster did not start on port ${PORT}`);
   await web('/api/folders', { method: 'POST', body: JSON.stringify({ name: 'Tech' }) });
   await web('/api/feeds', { method: 'POST', body: JSON.stringify({ url: feedUrl, folderId: 1 }) });
 });
