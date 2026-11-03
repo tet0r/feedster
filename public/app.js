@@ -521,9 +521,17 @@ function articleHtml(a, opts) {
   return `<div class="reader-article">${articleInner(a, opts)}</div>`;
 }
 
+// Some feeds (MLB, many news sites) carry only headlines; point to the article instead of an empty page.
+function headlineOnly(a) {
+  let host = '';
+  try { host = new URL(a.url).hostname.replace(/^www\./, ''); } catch { /* no link */ }
+  return `<p class="muted">This feed only shares headlines, not the article text.</p>
+    ${host ? `<p><a class="btn" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">Read the full article on ${esc(host)} ↗</a></p>` : ''}`;
+}
+
 function articleInner(a, { full = false } = {}) {
   const content = a.content ?? '';
-  const body = content ? sanitize(content, a.url || a.site_url) : `<p class="muted">${esc(a.snippet || 'No content in feed.')}</p>`;
+  const body = content.trim() ? sanitize(content, a.url || a.site_url) : headlineOnly(a);
   const hasImage = a.image && !content.includes(a.image.split('?')[0].split('/').pop());
   const date = new Date(a.published);
   return `

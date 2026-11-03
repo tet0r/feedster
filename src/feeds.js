@@ -69,7 +69,11 @@ function mediaImage(item) {
     .find((m) => (m['@_medium'] === 'image') || (m['@_type'] || '').startsWith('image/'));
   if (media) return media['@_url'];
   const enc = asArray(item.enclosure).find((e) => (e['@_type'] || '').startsWith('image/'));
-  return enc ? enc['@_url'] : null;
+  if (enc) return enc['@_url'];
+  // Non-standard but common: <image href="…"/>, <image>url</image>, <itunes:image href="…"/>
+  const img = item.image || item['itunes:image'];
+  if (img) return typeof img === 'object' ? img['@_href'] || img['@_url'] || text(img.url) || text(img) || null : text(img);
+  return null;
 }
 
 /** Parse RSS 2.0 / RSS 1.0 / Atom / JSON Feed into a normalized shape. */
@@ -156,38 +160,97 @@ async function httpGet(url, headers = {}) {
 
 const looksLikeFeed = (body) => /^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*<(rss|feed|rdf:RDF)[\s>]/i.test(body) || /^\s*\{[\s\S]*"version"\s*:\s*"https:\/\/jsonfeed/.test(body);
 
-/** Find a feed URL from a site URL by reading <link rel="alternate"> tags, then probing common paths. */
+// Big sites whose pages don't link to their feeds. Each one was checked to serve a feed to Feedster.
+const KNOWN_FEEDS = {
+  'mlb.com': 'https://www.mlb.com/feeds/news/rss.xml',
+  'espn.com': 'https://www.espn.com/espn/rss/news',
+  'bbc.com': 'https://feeds.bbci.co.uk/news/rss.xml',
+  'bbc.co.uk': 'https://feeds.bbci.co.uk/news/rss.xml',
+  'cnn.com': 'http://rss.cnn.com/rss/cnn_topstories.rss',
+  'nytimes.com': 'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml',
+};
+
+function knownFeed(url) {
+  const host = new URL(url).hostname.replace(/^www\./, '');
+  return KNOWN_FEEDS[host] || null;
+}
+
+function feedLinks(html, baseUrl) {
+  const found = [];
+  for (const tag of html.match(/<link\b[^>]*>/gi) || []) {
+    const attr = (name) => tag.match(new RegExp(`${name}\\s*=\\s*["']([^"']+)["']`, 'i'))?.[1];
+    if (/alternate/i.test(attr('rel') || '') && /(rss|atom|feed)\+?(xml|json)/i.test(attr('type') || '')) {
+      const href = resolveUrl(attr('href'), baseUrl);
+      if (href) found.push(href);
+    }
+  }
+  return found;
+}
+
+/** Common feed locations, starting with ones relative to the page (reddit /r/x/.rss, medium /feed/@user). */
+function guessedFeeds(pageUrl) {
+  const u = new URL(pageUrl);
+  const dir = u.pathname.replace(/\/+$/, '');
+  const paths = [];
+  if (dir) paths.push(`${dir}/.rss`, `${dir}/feed`, `${dir}/rss`, `${dir}/feed.xml`, `${dir}/rss.xml`, `/feed${dir}`);
+  paths.push('/feed', '/rss', '/rss.xml', '/atom.xml', '/feed.xml', '/index.xml', '/feed.json', '/?feed=rss2', '/feeds/posts/default');
+  return paths.map((p) => new URL(p, u.origin).href);
+}
+
+async function fetchFeed(url) {
+  try {
+    const res = await httpGet(url);
+    if (!res.ok) return null;
+    const body = await res.text();
+    return looksLikeFeed(body) ? { url: res.url || url, body } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** First candidate (in order) that turns out to be a feed; all are fetched at once. */
+async function firstFeed(candidates) {
+  const unique = [...new Set(candidates)];
+  const results = unique.map(fetchFeed);
+  for (const r of results) {
+    const hit = await r;
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * Find a feed from whatever the user typed: a feed URL, or a page that links to one,
+ * or a site whose feed sits at a common or known address.
+ */
 export async function discover(inputUrl) {
   let url = inputUrl.trim();
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  let host;
+  try { host = new URL(url).hostname; } catch { throw new Error("That doesn't look like a web address"); }
 
-  const res = await httpGet(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
-  const body = await res.text();
-  const finalUrl = res.url || url;
-  if (looksLikeFeed(body)) return { url: finalUrl, body };
+  let page = null;
+  let status = null;
+  try {
+    const res = await httpGet(url);
+    status = res.status;
+    if (res.ok) page = { url: res.url || url, body: await res.text() };
+  } catch (err) {
+    throw new Error(`Couldn't reach ${host} (${err.cause?.code || err.message})`);
+  }
+  if (page && looksLikeFeed(page.body)) return page;
 
-  const candidates = [];
-  for (const tag of body.match(/<link\b[^>]*>/gi) || []) {
-    const attr = (name) => tag.match(new RegExp(`${name}\\s*=\\s*["']([^"']+)["']`, 'i'))?.[1];
-    if (/alternate/i.test(attr('rel') || '') && /(rss|atom|feed)\+?(xml|json)/i.test(attr('type') || '')) {
-      const href = resolveUrl(attr('href'), finalUrl);
-      if (href) candidates.push(href);
-    }
-  }
-  for (const p of ['/feed', '/rss', '/rss.xml', '/atom.xml', '/feed.xml', '/index.xml', '/feed.json']) {
-    candidates.push(new URL(p, finalUrl).href);
-  }
+  // A site may refuse its homepage to feed readers but still serve its feed, so keep looking.
+  const base = page?.url || url;
+  const hit = (page && await firstFeed(feedLinks(page.body, base)))
+    || await firstFeed([...(knownFeed(base) ? [knownFeed(base)] : []), ...guessedFeeds(base)]);
+  if (hit) return hit;
 
-  for (const candidate of [...new Set(candidates)]) {
-    try {
-      const r = await httpGet(candidate);
-      if (!r.ok) continue;
-      const b = await r.text();
-      if (looksLikeFeed(b)) return { url: r.url || candidate, body: b };
-    } catch { /* try the next one */ }
+  if (status === 401 || status === 403 || status === 429) {
+    throw new Error(`${host} blocks feed readers (HTTP ${status}) and no feed was found. If the site has a feed, paste its address instead.`);
   }
-  throw new Error('No feed found at that address');
+  if (!page) throw new Error(`${host} returned HTTP ${status}`);
+  throw new Error(`No feed found on ${host}. If the site has one (often linked as "RSS"), paste its address instead.`);
 }
 
 const insertArticle = db.prepare(`

@@ -21,3 +21,12 @@ test('does not blow up on billion-laughs DOCTYPE entity bombs', () => {
   try { title = parseFeed(bomb, 'https://example.com/feed').title; } catch { /* rejected */ }
   assert.ok(title.length < 1000);
 });
+
+test('reads non-standard item images such as the <image href> MLB uses', () => {
+  const items = `<item><guid>a</guid><title>A</title><link>https://example.com/a</link><image href="https://img.example.com/a.jpg"/></item>
+    <item><guid>b</guid><title>B</title><link>https://example.com/b</link><itunes:image href="https://img.example.com/b.jpg"/></item>
+    <item><guid>c</guid><title>C</title><link>https://example.com/c</link><image>https://img.example.com/c.jpg</image></item>`;
+  const feed = parseFeed(rss(items), 'https://example.com/feed');
+  assert.deepEqual(feed.items.map((i) => i.image), ['https://img.example.com/a.jpg', 'https://img.example.com/b.jpg', 'https://img.example.com/c.jpg']);
+  assert.equal(feed.items[0].content, '');
+});

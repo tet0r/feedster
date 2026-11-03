@@ -7,6 +7,9 @@ fs.mkdirSync(dataDir, { recursive: true });
 
 export const db = new DatabaseSync(path.join(dataDir, 'feedster.db'));
 
+// Wait for another connection's lock instead of failing with "database is locked".
+db.exec('PRAGMA busy_timeout = 5000');
+
 db.exec(`
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;

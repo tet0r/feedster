@@ -4,6 +4,16 @@ All notable changes to Feedster are listed here, newest first. Version numbers f
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-03
+
+### Fixed
+
+- Subscribing by website address finds many more feeds. Feedster now tries addresses relative to the page you entered (such as reddit's `/r/name/.rss` and Medium's `/@name/feed`), keeps looking when a site refuses its homepage to feed readers, and knows where MLB, ESPN, BBC, CNN and The New York Times keep feeds they don't link to. Candidate addresses are checked in parallel, so discovery is faster too.
+- Clearer messages when a site blocks feed readers or has no feed, suggesting to paste the feed's address directly.
+- Article pictures from feeds that use a plain `<image>` or `<itunes:image>` tag, such as MLB's, now show.
+- Articles from headline-only feeds show a link to the full article instead of an empty page.
+- The database waits briefly for a lock instead of failing with "database is locked".
+
 ## [1.1.0] - 2026-11-03
 
 ### Added
