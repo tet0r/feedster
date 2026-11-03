@@ -1,7 +1,8 @@
 services:
   feedster:
     build: .
-    image: feedster:latest
+    # Always build locally; never try to pull a "feedster" image from Docker Hub.
+    pull_policy: build
     container_name: feedster
     restart: unless-stopped
     # Run a tiny init as PID 1 so `docker compose down` stops the app immediately.
