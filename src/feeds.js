@@ -4,11 +4,23 @@ import { db, tx } from './db.js';
 const USER_AGENT = 'Feedster/1.0 (+self-hosted feed reader)';
 const FETCH_TIMEOUT_MS = 20_000;
 
+// fast-xml-parser counts every entity (even &lt; and &amp;) toward a 1,000-per-document
+// limit by default, which ordinary feeds with escaped HTML easily exceed. Lift that count;
+// DOCTYPE-defined entities stay capped in size, number and total expanded length.
+const entityLimits = {
+  enabled: true,
+  maxTotalExpansions: 10_000_000,
+  maxExpansionDepth: 10,
+  maxEntitySize: 10_000,
+  maxEntityCount: 100,
+  maxExpandedLength: 100_000,
+};
+
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   textNodeName: '#text',
-  processEntities: true,
+  processEntities: entityLimits,
   htmlEntities: true,
   trimValues: true,
   // Keep these as arrays even when a feed has a single entry.
@@ -298,7 +310,7 @@ ${lines.join('\n')}
 
 /** Import an OPML file: creates folders and feeds immediately, then fetches them in the background. */
 export function importOpml(xml) {
-  const doc = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '', isArray: (n) => n === 'outline' }).parse(xml);
+  const doc = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '', processEntities: entityLimits, isArray: (n) => n === 'outline' }).parse(xml);
   const root = doc.opml?.body?.outline;
   if (!root) throw new Error('Not a valid OPML file');
 
