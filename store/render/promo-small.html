@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>
+    html, body { margin: 0; width: 440px; height: 280px; overflow: hidden; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; color: #fff;
+      background: linear-gradient(135deg, #1f6feb 0%, #1a56c4 60%, #143f94 100%);
+      display: flex; flex-direction: column; justify-content: center; padding: 0 40px; box-sizing: border-box;
+    }
+    .row { display: flex; align-items: center; gap: 16px; }
+    .icon { position: relative; width: 72px; height: 72px; border-radius: 16px; background: rgba(255, 255, 255, .14); display: grid; place-items: center; }
+    .icon img { width: 52px; height: 52px; }
+    .badge { position: absolute; right: -10px; top: -8px; background: #fff; color: #1f6feb; font-weight: 800; font-size: 15px; border-radius: 12px; padding: 2px 8px; box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+    h1 { font-size: 40px; margin: 0; letter-spacing: -.02em; }
+    p { font-size: 18px; line-height: 1.35; margin: 22px 0 0; opacity: .92; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <div class="icon"><img src="/ext/icons/icon-128.png" alt=""><span class="badge">24</span></div>
+    <h1>Feedster</h1>
+  </div>
+  <p>Your self-hosted feed reader's unread count, right in the toolbar.</p>
+</body>
+</html>

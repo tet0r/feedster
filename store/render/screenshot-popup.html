@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 1280px; height: 800px; overflow: hidden; }
+    body {
+      font: 16px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; color: #1d2228;
+      background: linear-gradient(135deg, #eef4ff 0%, #f8fafc 55%, #e8f0fe 100%);
+      display: grid; grid-template-columns: 520px 1fr; align-items: center;
+    }
+    .copy { padding: 0 40px 0 80px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 22px; color: #1f6feb; margin-bottom: 26px; }
+    .brand img { width: 40px; height: 40px; }
+    h1 { font-size: 44px; line-height: 1.12; letter-spacing: -.02em; margin: 0 0 22px; }
+    ul { margin: 0; padding: 0; list-style: none; }
+    li { position: relative; padding-left: 30px; margin: 12px 0; font-size: 18px; color: #4b525c; }
+    li::before { content: "✓"; position: absolute; left: 0; color: #1f6feb; font-weight: 700; }
+    .browser {
+      width: 640px; height: 640px; background: #fff; border-radius: 12px; overflow: hidden;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, .18), 0 0 0 1px rgba(15, 23, 42, .06); position: relative;
+    }
+    .bar { height: 48px; background: #f1f3f6; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid #e3e5e8; }
+    .dots span { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: #d4d7dc; margin-right: 5px; }
+    .url { flex: 1; height: 30px; border-radius: 15px; background: #fff; border: 1px solid #e3e5e8; display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: #868d96; }
+    .ext { position: relative; width: 32px; height: 32px; border-radius: 6px; background: #e3ecfd; display: grid; place-items: center; }
+    .ext img { width: 20px; height: 20px; }
+    .badge { position: absolute; right: -6px; bottom: -4px; background: #1f6feb; color: #fff; font-size: 10px; font-weight: 700; border-radius: 8px; padding: 1px 4px; line-height: 13px; }
+    .page { padding: 28px 30px; }
+    .page .line { height: 12px; border-radius: 6px; background: #eef0f3; margin: 14px 0; }
+    .popup { position: absolute; top: 44px; right: 12px; width: 340px; height: 404px; border: 0; border-radius: 10px; box-shadow: 0 12px 32px rgba(15, 23, 42, .22); background: #fff; }
+  </style>
+</head>
+<body>
+  <div class="copy">
+    <div class="brand"><img src="/ext/icons/icon-128.png" alt="">Feedster</div>
+    <h1>Your unread count, one click away</h1>
+    <ul>
+      <li>See how many articles are waiting in your self-hosted Feedster</li>
+      <li>Glance at the latest headlines from the toolbar</li>
+      <li>Jump straight to Feedster, reusing the tab you have open</li>
+    </ul>
+  </div>
+  <div class="browser">
+    <div class="bar">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <div class="url">example.com</div>
+      <div class="ext"><img src="/ext/icons/icon-32.png" alt=""><span class="badge">24</span></div>
+    </div>
+    <div class="page">
+      <div class="line" style="width:70%"></div><div class="line" style="width:92%"></div><div class="line" style="width:84%"></div>
+      <div class="line" style="width:60%"></div><div class="line" style="width:88%"></div><div class="line" style="width:76%"></div>
+    </div>
+    <iframe class="popup" src="/ext/popup.html" title="Feedster popup"></iframe>
+  </div>
+</body>
+</html>

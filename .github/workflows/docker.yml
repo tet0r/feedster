@@ -143,3 +143,31 @@ jobs:
           else
             gh release create "v$version" --target "$GITHUB_SHA" --generate-notes feedster-extension.zip
           fi
+
+      # The browser extension goes to both stores with each new release. Each store's first
+      # version is submitted by hand (store/SUBMITTING.md); until its secrets are set, the step skips.
+      - name: Publish extension to Firefox Add-ons
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.version.outputs.new == 'true'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$WEB_EXT_API_KEY" ] || [ -z "$WEB_EXT_API_SECRET" ]; then
+            echo "::notice title=Firefox Add-ons::AMO_JWT_ISSUER / AMO_JWT_SECRET not set; skipping. See store/SUBMITTING.md."
+            exit 0
+          fi
+          # Submits for Mozilla's review and returns without waiting for it.
+          npx -y web-ext@10.7.0 sign --source-dir extension --channel listed --approval-timeout 0
+
+      - name: Publish extension to Chrome Web Store
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.version.outputs.new == 'true'
+        env:
+          CWS_SERVICE_ACCOUNT: ${{ secrets.CWS_SERVICE_ACCOUNT }}
+          CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+        run: |
+          if [ -z "$CWS_SERVICE_ACCOUNT" ] || [ -z "$CWS_PUBLISHER_ID" ] || [ -z "$CWS_EXTENSION_ID" ]; then
+            echo "::notice title=Chrome Web Store::CWS_SERVICE_ACCOUNT / CWS_PUBLISHER_ID / CWS_EXTENSION_ID not set; skipping. See store/SUBMITTING.md."
+            exit 0
+          fi
+          node scripts/publish-chrome.mjs feedster-extension.zip

@@ -9,6 +9,7 @@ All notable changes to Feedster are listed here, newest first. Version numbers f
 ### Added
 
 - A Feedster browser extension for Chrome, Edge and Firefox. The toolbar icon shows your unread count, checked every 1 to 60 minutes. Clicking it shows your latest unread articles and an Open Feedster button that switches to an open Feedster tab or opens one. It signs in with the Reading apps username and app password, keeps only the sign-in token, and asks for access to your Feedster address only. A grey "!" on the icon explains when Feedster can't be reached or the sign-in needs renewing. Each release includes it as `feedster-extension.zip`; Settings → Browser extension links to the latest one.
+- Releases also submit the extension to Firefox Add-ons and the Chrome Web Store once their API keys are set up ([store/SUBMITTING.md](store/SUBMITTING.md)), and a [privacy policy](PRIVACY.md) covers the extension and Feedster.
 
 ## [1.3.0] - 2026-11-03
 

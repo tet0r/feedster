@@ -64,7 +64,7 @@ NetNewsWire also runs on the Mac with the same FreshRSS account.
 
 Feedster has its own extension for **Chrome, Edge and Firefox**. It shows your unread count on the toolbar icon, checked every few minutes. Click the icon for your latest unread articles and an **Open Feedster** button, which switches to your Feedster tab if one is already open. It signs in with the username and app password from **Settings → Reading apps**, keeps only the sign-in token Feedster returns (not the password), and can only access your Feedster address.
 
-Download **feedster-extension.zip** from the [latest release](https://github.com/tet0r/feedster/releases/latest/download/feedster-extension.zip), or from Feedster's **Settings → Browser extension**. It isn't in the browser stores yet, so it installs as a developer extension:
+Download **feedster-extension.zip** from the [latest release](https://github.com/tet0r/feedster/releases/latest/download/feedster-extension.zip), or from Feedster's **Settings → Browser extension**. It is on its way to the Chrome Web Store and Firefox Add-ons; until it's listed there, it installs as a developer extension:
 
 **Chrome and Edge**
 
@@ -77,6 +77,8 @@ To update, unzip the new version over the same folder and click the reload butto
 **Firefox**
 
 Firefox only keeps add-ons that Mozilla has signed, so until the extension is signed it can be loaded for the current session: open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…** and choose the zip. It stays until Firefox restarts. (Firefox Developer Edition and Nightly can install it permanently after setting `xpinstall.signatures.required` to `false` in `about:config`.) Needs Firefox 140 or later.
+
+Maintainers: publishing to the stores is automated; the one-time setup is in [store/SUBMITTING.md](store/SUBMITTING.md).
 
 ### Subscribing from your browser
 
