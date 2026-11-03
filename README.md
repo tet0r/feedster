@@ -33,7 +33,7 @@ The database lives in the `feedster-data` volume. To use a host folder instead, 
 
 ## Apps and browser extensions
 
-Feedster works in any browser on desktop or phone. To read in a native app instead, or to subscribe to sites from your browser's toolbar, these are good free options. None of them were made for Feedster: they connect through the same **Google Reader (FreshRSS)** and **Fever** APIs that FreshRSS offers, so choose the FreshRSS (or Google Reader) account type wherever an app has one. Fever works too, but it can't add, move or rename subscriptions.
+Feedster works in any browser on desktop or phone. For an unread count in your browser toolbar there is the [Feedster extension](#browser-extension); to read in a native app, or to subscribe to sites from your browser, these are good free options. None of them were made for Feedster: they connect through the same **Google Reader (FreshRSS)** and **Fever** APIs that FreshRSS offers, so choose the FreshRSS (or Google Reader) account type wherever an app has one. Fever works too, but it can't add, move or rename subscriptions.
 
 ### Connecting an app
 
@@ -60,11 +60,29 @@ Phone apps need Feedster to be reachable over HTTPS (see [Running behind a rever
 
 NetNewsWire also runs on the Mac with the same FreshRSS account.
 
-### Browser (Chrome, Firefox, Edge and others)
+### Browser extension
 
-There is no maintained extension that reads a Google Reader account inside the browser; Feedster's web page fills that role. What extensions do well is find a site's feeds and send them to your reader:
+Feedster has its own extension for **Chrome, Edge and Firefox**. It shows your unread count on the toolbar icon, checked every few minutes. Click the icon for your latest unread articles and an **Open Feedster** button, which switches to your Feedster tab if one is already open. It signs in with the username and app password from **Settings → Reading apps**, keeps only the sign-in token Feedster returns (not the password), and can only access your Feedster address.
 
-| Extension | Cost | What it does | Get it |
+Download **feedster-extension.zip** from the [latest release](https://github.com/tet0r/feedster/releases/latest/download/feedster-extension.zip), or from Feedster's **Settings → Browser extension**. It isn't in the browser stores yet, so it installs as a developer extension:
+
+**Chrome and Edge**
+
+1. Unzip it into a folder you'll keep (the browser loads it from there).
+2. Open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**, click **Load unpacked** and choose that folder.
+3. The setup page opens: enter your Feedster address, username and app password, then **Connect**, and allow access to your Feedster address when asked.
+
+To update, unzip the new version over the same folder and click the reload button on the extension's card.
+
+**Firefox**
+
+Firefox only keeps add-ons that Mozilla has signed, so until the extension is signed it can be loaded for the current session: open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…** and choose the zip. It stays until Firefox restarts. (Firefox Developer Edition and Nightly can install it permanently after setting `xpinstall.signatures.required` to `false` in `about:config`.) Needs Firefox 140 or later.
+
+### Subscribing from your browser
+
+Tools that find a site's feeds and send them to Feedster:
+
+| Tool | Cost | What it does | Get it |
 | --- | --- | --- | --- |
 | [RSSHub Radar](https://github.com/DIYgod/RSSHub-Radar) | Free, open source | Shows the feeds on the page you're on, with one-click subscribe | [Chrome](https://chromewebstore.google.com/detail/kefjpfngnndepjbopdmoebkipbgkggaa), [Firefox](https://addons.mozilla.org/firefox/addon/rsshub-radar/) (Edge and other Chromium browsers can use the Chrome version) |
 | Feedster bookmarklet | Free, built in | Subscribe to the site you're on from your bookmarks bar, in any browser | Settings → Subscribe from your browser: drag **+ Feedster** to the bookmarks bar |
@@ -97,6 +115,7 @@ Releases are cut by changing the number in the `VERSION` file: the first push to
 - Folders with drag-and-drop, rename, move, unsubscribe; per-feed error indicators
 - Full articles for summary-only feeds, extracted from the article page (toggle per feed)
 - Resizable sidebar, article list and reading pane
+- Browser extension for Chrome, Edge and Firefox with your unread count on the toolbar
 - Failing feeds back off (up to a day) instead of hammering a site that is refusing them
 - Feed icons from the feed itself or the website's favicon, stored locally (a letter only when a site has none)
 - Unread / All views, Starred, full-text search across titles, content and authors

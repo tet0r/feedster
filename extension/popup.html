@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Feedster</title>
+  <link rel="stylesheet" href="ui.css">
+  <style>
+    body { width: 340px; }
+    header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    header img { width: 22px; height: 22px; }
+    header .name { font-weight: 650; flex: 1; }
+    header .count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    header .count b { color: var(--text); font-size: 15px; }
+    .list { max-height: 330px; overflow-y: auto; }
+    .item { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--border); background: none; padding: 8px 14px; cursor: pointer; }
+    .item:hover { background: var(--bg-soft); }
+    .item .t { font-weight: 550; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .item .m { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .message { padding: 18px 14px; text-align: center; color: var(--text-soft); }
+    .message p { margin: 0 0 12px; }
+    footer { display: flex; align-items: center; gap: 4px; padding: 10px 14px; }
+    footer .btn { flex: 1; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="icons/icon-32.png" alt="">
+    <span class="name">Feedster</span>
+    <span class="count" id="count"></span>
+  </header>
+  <div class="message" id="message" hidden></div>
+  <div class="list" id="list"></div>
+  <footer id="footer">
+    <button class="btn primary" id="open">Open Feedster</button>
+    <button class="link" id="refresh" title="Check now">Refresh</button>
+    <button class="link" id="settings">Settings</button>
+  </footer>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

@@ -52,6 +52,21 @@ jobs:
           echo "minor=${version%.*}" >> "$GITHUB_OUTPUT"
           if git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then echo "new=false" >> "$GITHUB_OUTPUT"; else echo "new=true" >> "$GITHUB_OUTPUT"; fi
 
+      # The toolbar extension ships with each release as feedster-extension.zip (one package
+      # for Chrome, Edge and Firefox), stamped with the release version. Mozilla's linter
+      # catches manifest mistakes before anyone installs it.
+      - name: Browser extension
+        run: |
+          npx -y web-ext@10.7.0 lint --source-dir extension --self-hosted
+          node -e '
+            const fs = require("fs");
+            const m = JSON.parse(fs.readFileSync("extension/manifest.json", "utf8"));
+            m.version = process.argv[1];
+            fs.writeFileSync("extension/manifest.json", JSON.stringify(m, null, 2) + "\n");
+          ' "${{ steps.version.outputs.version }}"
+          (cd extension && zip -qr ../feedster-extension.zip .)
+          unzip -l feedster-extension.zip
+
       - uses: docker/setup-qemu-action@v3
 
       - uses: docker/setup-buildx-action@v3
@@ -124,7 +139,7 @@ jobs:
           version="${{ steps.version.outputs.version }}"
           awk -v v="$version" 'index($0, "## [" v "]") == 1 {on=1; next} /^## \[/ {on=0} /^\[[^]]+\]: / {next} on' CHANGELOG.md > notes.md
           if grep -q '[^[:space:]]' notes.md; then
-            gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file notes.md
+            gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file notes.md feedster-extension.zip
           else
-            gh release create "v$version" --target "$GITHUB_SHA" --generate-notes
+            gh release create "v$version" --target "$GITHUB_SHA" --generate-notes feedster-extension.zip
           fi
