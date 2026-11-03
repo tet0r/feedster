@@ -263,3 +263,16 @@ test('turning app sync off signs apps out', async () => {
   assert.equal((await gr('/reader/api/0/subscription/list?output=json')).status, 401);
   assert.equal((await fever('groups')).auth, 0);
 });
+
+test('subscribe links from browser extensions open the Add dialog', async () => {
+  const feed = 'https://example.com/feed.xml?a=1&b=2';
+  const enc = encodeURIComponent(feed);
+  for (const path of [`/i/?c=feed&a=add&url_rss=${enc}`, `/bookmarklet?uri=${enc}`, `/?add_feed=${enc}`, `/?subscribe=${enc}`]) {
+    const res = await fetch(BASE + path, { redirect: 'manual' });
+    assert.equal(res.status, 302, path);
+    assert.equal(res.headers.get('location'), `/?add=${enc}`, path);
+  }
+  // The target page is the app itself, which reads ?add= and asks before subscribing.
+  assert.equal((await fetch(`${BASE}/?add=${enc}`)).status, 200);
+  assert.equal((await web('/api/state')).feeds.length, 1, 'nothing was subscribed by following the link');
+});

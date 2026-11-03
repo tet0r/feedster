@@ -820,17 +820,18 @@ for (const d of document.querySelectorAll('dialog')) {
   });
 }
 
-function openAddDialog() {
+function openAddDialog(prefill) {
   const sel = $('#addForm select');
   sel.innerHTML = `<option value="">No folder</option>${S.folders.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}<option value="new">New folder…</option>`;
   if (S.scope.type === 'folder') sel.value = S.scope.id;
   $('#addError').hidden = true;
   $('#addForm').reset();
   if (S.scope.type === 'folder') sel.value = S.scope.id;
+  if (typeof prefill === 'string') $('#addForm').url.value = prefill;
   $('#addDialog').showModal();
 }
 
-$('#addBtn').addEventListener('click', openAddDialog);
+$('#addBtn').addEventListener('click', () => openAddDialog());
 
 $('#addForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -899,6 +900,8 @@ function showSync(s) {
   $('#syncError').hidden = true;
   $('#greaderUrl').textContent = `${location.origin}/api/greader.php`;
   $('#feverUrl').textContent = `${location.origin}/api/fever.php`;
+  $('#radarUrl').textContent = location.origin;
+  $('#bookmarklet').href = `javascript:location.href='${location.origin}/?add='+encodeURIComponent(location.href)`;
 }
 
 async function saveSync(body) {
@@ -1036,4 +1039,15 @@ window.addEventListener('resize', applyPaneWidths);
 applyTheme();
 renderHeader();
 applyPaneWidths();
-reloadAll().catch((err) => toast(err.message));
+// A subscribe link (from a browser extension or the bookmarklet) opens the Add dialog pre-filled.
+// It never subscribes on its own, so a link elsewhere can't add feeds without you confirming.
+const addParam = new URLSearchParams(location.search).get('add');
+if (addParam) history.replaceState(null, '', location.pathname);
+reloadAll()
+  .then(() => { if (addParam) openAddDialog(addParam); })
+  .catch((err) => toast(err.message));
+
+$('#bookmarklet').addEventListener('click', (e) => {
+  e.preventDefault();
+  toast('Drag this button to your bookmarks bar, then click it on any website');
+});

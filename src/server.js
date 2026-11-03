@@ -242,19 +242,46 @@ function serveStatic(res, pathname) {
   });
 }
 
-const LOGIN_PAGE = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+const escapeAttr = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// Only paths on this site, so the sign-in form can't be used to send someone elsewhere.
+const safeNext = (next) => (typeof next === 'string' && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : '/');
+
+const loginPage = (next = '/') => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Feedster</title><link rel="stylesheet" href="/style.css">
 <body class="login"><form method="post" action="/login"><h1>Feedster</h1>
+<input type="hidden" name="next" value="${escapeAttr(safeNext(next))}">
 <input type="password" name="password" placeholder="Password" autofocus required><button>Sign in</button></form></body>`;
+
+/**
+ * "Subscribe in reader" links from browser extensions such as RSSHub Radar, in the formats they
+ * use for FreshRSS (/i/?c=feed&a=add&url_rss=), Miniflux (/bookmarklet?uri=) and Inoreader
+ * (/?add_feed=). All become /?add=<url>, which opens the Add dialog for the reader to confirm.
+ */
+function subscribeLink(url) {
+  const p = url.searchParams;
+  let feed = null;
+  if ((url.pathname === '/i/' || url.pathname === '/i') && p.get('a') === 'add') feed = p.get('url_rss');
+  else if (url.pathname === '/bookmarklet') feed = p.get('uri');
+  else if (url.pathname === '/') feed = p.get('add_feed') || p.get('subscribe');
+  return feed ? `/?add=${encodeURIComponent(feed)}` : null;
+}
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname === '/login' && req.method === 'POST') {
-      const pw = new URLSearchParams(await readBody(req)).get('password') || '';
+      const form = new URLSearchParams(await readBody(req));
+      const pw = form.get('password') || '';
+      const next = safeNext(form.get('next'));
       const ok = PASSWORD && pw.length === PASSWORD.length && crypto.timingSafeEqual(Buffer.from(pw), Buffer.from(PASSWORD));
-      if (!ok) return send(res, 401, LOGIN_PAGE, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.writeHead(303, { Location: '/', 'Set-Cookie': `feedster=${sessionToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000` });
+      if (!ok) return send(res, 401, loginPage(next), { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(303, { Location: next, 'Set-Cookie': `feedster=${sessionToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000` });
+      return res.end();
+    }
+    const subscribe = req.method === 'GET' && subscribeLink(url);
+    if (subscribe) {
+      res.writeHead(302, { Location: subscribe });
       return res.end();
     }
     // Reading apps authenticate with their own credentials (see sync.js).
@@ -264,7 +291,8 @@ const server = http.createServer(async (req, res) => {
 
     if (!authed(req) && url.pathname !== '/style.css') {
       if (url.pathname.startsWith('/api/')) return send(res, 401, { error: 'Unauthorized' });
-      return send(res, 200, LOGIN_PAGE, { 'Content-Type': 'text/html; charset=utf-8' });
+      // Come back to the same page (e.g. a subscribe link) after signing in.
+      return send(res, 200, loginPage(url.pathname + url.search), { 'Content-Type': 'text/html; charset=utf-8' });
     }
 
     if (url.pathname.startsWith('/api/')) {

@@ -31,16 +31,47 @@ The database lives in the `feedster-data` volume. To use a host folder instead, 
 `feedster-data:/data` with e.g. `./data:/data` and make it writable by the container user
 (`sudo chown 1000:1000 ./data`).
 
-## Reading apps and browser extensions
+## Apps and browser extensions
 
-Feedster can be used from apps that support a **FreshRSS / Google Reader** or **Fever** account. Open **Settings → Reading apps**, choose a username and an app password (separate from the web sign-in password), then add an account in your app:
+Feedster works in any browser on desktop or phone. To read in a native app instead, or to subscribe to sites from your browser's toolbar, these are good free options. None of them were made for Feedster: they connect through the same **Google Reader (FreshRSS)** and **Fever** APIs that FreshRSS offers, so choose the FreshRSS (or Google Reader) account type wherever an app has one. Fever works too, but it can't add, move or rename subscriptions.
 
-| App type | Account to choose | Server address |
-| --- | --- | --- |
-| Reeder, NetNewsWire, ReadKit, FeedMe, Fluent Reader, Read You, browser extensions with FreshRSS support | FreshRSS (or "Google Reader API") | `https://your-server/api/greader.php` |
-| Unread, Reeder (classic), other Fever clients | Fever | `https://your-server/api/fever.php` |
+### Connecting an app
 
-Folders, read and starred articles sync both ways. Google Reader apps can also add, rename, move and remove subscriptions. Mobile apps usually need the server to be reachable over HTTPS, so put Feedster behind a reverse proxy (see below) when using them away from home.
+1. In Feedster, open **Settings → Reading apps** and choose a username and app password. These are only for apps; your web password is never needed.
+2. In the app, add a **FreshRSS** (or **Google Reader API**) account with the server address `https://your-server/api/greader.php`, or a **Fever** account with `https://your-server/api/fever.php`.
+3. Sign in with that username and app password.
+
+Phone apps need Feedster to be reachable over HTTPS (see [Running behind a reverse proxy](#running-behind-a-reverse-proxy)).
+
+### Android
+
+| App | Cost | Account type | Get it |
+| --- | --- | --- | --- |
+| [Capy Reader](https://github.com/jocmp/capyreader) | Free, open source | FreshRSS (Google Reader API) | Google Play, F-Droid. Needs Android 11+ |
+| [Read You](https://github.com/Ashinch/ReadYou) | Free, open source | FreshRSS / Google Reader, or Fever | F-Droid, GitHub releases |
+| [FeedMe](https://github.com/seazon/FeedMe) | Free with ads | FreshRSS or Fever | Google Play |
+
+### iPhone and iPad
+
+| App | Cost | Account type | Get it |
+| --- | --- | --- | --- |
+| [NetNewsWire](https://netnewswire.com/) | Free, open source | FreshRSS | App Store. The current version needs iOS 26 |
+| [Fiery Feeds](https://apps.apple.com/app/id1158763303) | Free, optional Pro upgrade | FreshRSS or Fever | App Store |
+
+NetNewsWire also runs on the Mac with the same FreshRSS account.
+
+### Browser (Chrome, Firefox, Edge and others)
+
+There is no maintained extension that reads a Google Reader account inside the browser; Feedster's web page fills that role. What extensions do well is find a site's feeds and send them to your reader:
+
+| Extension | Cost | What it does | Get it |
+| --- | --- | --- | --- |
+| [RSSHub Radar](https://github.com/DIYgod/RSSHub-Radar) | Free, open source | Shows the feeds on the page you're on, with one-click subscribe | [Chrome](https://chromewebstore.google.com/detail/kefjpfngnndepjbopdmoebkipbgkggaa), [Firefox](https://addons.mozilla.org/firefox/addon/rsshub-radar/) (Edge and other Chromium browsers can use the Chrome version) |
+| Feedster bookmarklet | Free, built in | Subscribe to the site you're on from your bookmarks bar, in any browser | Settings → Subscribe from your browser: drag **+ Feedster** to the bookmarks bar |
+
+To set up RSSHub Radar: open its settings, turn on quick subscription for **FreshRSS**, and enter your Feedster address (`https://your-server`). Feedster understands the subscribe links RSSHub Radar makes for FreshRSS, Miniflux and Inoreader, and opens them in its **Add subscription** dialog for you to confirm.
+
+These apps and extensions speak the same APIs as FreshRSS, and Feedster's end-to-end tests send the requests they use, but they haven't all been tried against Feedster by hand. If one misbehaves, please open an issue.
 
 ## Versions and updates
 

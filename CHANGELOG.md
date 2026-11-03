@@ -9,6 +9,8 @@ All notable changes to Feedster are listed here, newest first. Version numbers f
 ### Added
 
 - Full articles in the reading pane. When a feed only gives a summary, Feedster fetches the article's page and shows the main text, extracted with Readability (the engine behind Firefox's Reader View). A "Full article" button (or `f`) switches between the full article and the feed's text, and the choice is remembered per feed. Fetched articles are kept, so each page is only downloaded once.
+- Subscribe from your browser: Feedster accepts the "subscribe in reader" links that extensions such as RSSHub Radar make (in the FreshRSS, Miniflux and Inoreader formats), and Settings has a bookmarklet for any browser. Both open the Add subscription dialog to confirm; nothing is subscribed without you. A subscribe link opened while signed out picks up again after you sign in.
+- The README recommends free apps and extensions to use with Feedster: Capy Reader, Read You and FeedMe on Android; NetNewsWire and Fiery Feeds on iPhone and iPad; RSSHub Radar for Chrome and Firefox.
 - Drag the dividers between the sidebar, the article list and the reading pane to resize them. Widths are remembered; double-click a divider to reset it, or use the arrow keys on a focused divider.
 
 ### Fixed
