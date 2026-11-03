@@ -19,8 +19,13 @@ Open http://localhost:8080. Data is stored in `./data/feedster.db`.
 
 ```bash
 cp .env.example .env   # optional: set FEEDSTER_PASSWORD, port, etc.
-docker compose up -d --build
+docker compose up -d
 ```
+
+The compose file pulls the prebuilt image `ghcr.io/tet0r/feedster:latest` (amd64 and arm64),
+so it can be pasted on its own into Portainer or any other stack manager; set the variables
+from `.env.example` in the stack's environment settings. To build from source instead, swap
+the `image:` line for `build: .` and run `docker compose up -d --build`.
 
 The database lives in the `feedster-data` volume. To use a host folder instead, replace
 `feedster-data:/data` with e.g. `./data:/data` and make it writable by the container user
