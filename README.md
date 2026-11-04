@@ -69,7 +69,11 @@ Apps that only offer a **Fever** account can use `https://your-server/api/fever.
 
 The Feedster extension for Chrome, Edge and Firefox shows your unread count on the toolbar. Click it to see your newest headlines or open Feedster.
 
-Store listings are on the way. Until then, download [feedster-extension.zip](https://github.com/tet0r/feedster/releases/latest/download/feedster-extension.zip), unzip it, open `chrome://extensions`, turn on **Developer mode** and click **Load unpacked**. In Firefox, use **Load Temporary Add-on** at `about:debugging#/runtime/this-firefox`. Sign in with your reading-app username and password.
+**Chrome and Edge:** install it from the [Chrome Web Store](https://chromewebstore.google.com/detail/feedster/lecfbammajmdcafoodjalelofaelbaoc).
+
+**Firefox:** the Firefox Add-ons listing is on the way. Until then, download [feedster-firefox.zip](https://github.com/tet0r/feedster/releases/latest/download/feedster-firefox.zip) and load it with **Load Temporary Add-on** at `about:debugging#/runtime/this-firefox`. It stays until Firefox restarts.
+
+After installing, sign in with your reading-app username and password.
 
 To subscribe to the site you're on, use [RSSHub Radar](https://github.com/DIYgod/RSSHub-Radar) set to FreshRSS with your Feedster address, or drag the **+ Feedster** bookmarklet from Feedster's Settings to your bookmarks bar.
 

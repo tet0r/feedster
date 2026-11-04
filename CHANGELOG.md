@@ -4,6 +4,10 @@ All notable changes to Feedster are listed here, newest first. Version numbers f
 
 ## [Unreleased]
 
+### Changed
+
+- The browser extension is on the Chrome Web Store. Settings → Browser extension links to the listing for Chrome and Edge, and the README covers Firefox until its listing is approved.
+
 ## [1.4.1] - 2026-11-03
 
 ### Changed
