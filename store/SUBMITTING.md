@@ -110,6 +110,13 @@ In GitHub: **tet0r/feedster → Settings → Secrets and variables → Actions �
 
 From then on, each new `VERSION` on `main` submits the extension to both stores for review. The version number is stamped from `VERSION`, so it always goes up.
 
+The two stores are published separately, so a problem with one doesn't hold up the other, and the reason for a failure appears on the run's summary page. To send the current version to a store again, open **Actions → Docker image → Run workflow** on `main` and choose a store under **Publish the browser extension**.
+
+Two cases need the store's dashboard instead:
+
+- **A release adds a permission.** Chrome asks for a justification for each permission, and its Privacy tab only shows the box once a package with that permission is uploaded. Upload that version's `feedster-chrome.zip` under **Package**, fill in the justification, and submit.
+- **Mozilla is still reviewing an earlier version.** Wait for that review, then run the workflow with **firefox**, or upload `feedster-firefox.zip` on the add-on's page.
+
 ---
 
 ## Text to paste

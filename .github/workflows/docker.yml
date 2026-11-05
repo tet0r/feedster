@@ -4,7 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Run it by hand from the Actions tab, optionally sending the current extension version to the
+  # stores again, for example after a store was unavailable or a first review finished.
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the browser extension (current VERSION) to
+        type: choice
+        options: [none, both, firefox, chrome]
+        default: none
 
 jobs:
   build:
@@ -56,6 +64,7 @@ jobs:
       # feedster-chrome.zip and feedster-firefox.zip for the stores, and feedster-extension.zip
       # (loads in both) for developer-mode installs. Mozilla's linter checks the Firefox package.
       - name: Browser extension
+        id: extension
         run: |
           node scripts/package-extension.mjs
           npx -y web-ext@10.7.0 lint --source-dir dist/firefox --self-hosted
@@ -126,6 +135,7 @@ jobs:
       # Tags the commit and publishes this version's CHANGELOG section as the
       # release notes; running instances see the release and offer the update
       - name: Create release
+        id: release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.version.outputs.new == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -138,10 +148,15 @@ jobs:
             gh release create "v$version" --target "$GITHUB_SHA" --generate-notes dist/feedster-chrome.zip dist/feedster-firefox.zip dist/feedster-extension.zip
           fi
 
-      # The browser extension goes to both stores with each new release. Each store's first
-      # version is submitted by hand (store/SUBMITTING.md); until its secrets are set, the step skips.
+      # The browser extension goes to both stores with each new release, or on demand from the
+      # Actions tab (Run workflow → Publish the browser extension). Each store's first version is
+      # submitted by hand (store/SUBMITTING.md); until its secrets are set, its step skips. The two
+      # steps don't depend on each other, and a failure shows its reason on the run's summary page.
       - name: Publish extension to Firefox Add-ons
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.version.outputs.new == 'true'
+        if: >-
+          !cancelled() && steps.extension.outcome == 'success' && github.ref == 'refs/heads/main' && (
+            (github.event_name == 'push' && steps.release.outcome == 'success') ||
+            (github.event_name == 'workflow_dispatch' && contains(fromJSON('["both", "firefox"]'), inputs.publish)))
         env:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
@@ -151,10 +166,19 @@ jobs:
             exit 0
           fi
           # Submits for Mozilla's review and returns without waiting for it.
-          npx -y web-ext@10.7.0 sign --source-dir dist/firefox --channel listed --approval-timeout 0
+          status=0
+          npx -y web-ext@10.7.0 sign --source-dir dist/firefox --channel listed --approval-timeout 0 > amo.log 2>&1 || status=$?
+          cat amo.log
+          if [ "$status" -ne 0 ]; then
+            node scripts/annotate-error.mjs "Firefox Add-ons" < amo.log
+            exit "$status"
+          fi
 
       - name: Publish extension to Chrome Web Store
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.version.outputs.new == 'true'
+        if: >-
+          !cancelled() && steps.extension.outcome == 'success' && github.ref == 'refs/heads/main' && (
+            (github.event_name == 'push' && steps.release.outcome == 'success') ||
+            (github.event_name == 'workflow_dispatch' && contains(fromJSON('["both", "chrome"]'), inputs.publish)))
         env:
           CWS_SERVICE_ACCOUNT: ${{ secrets.CWS_SERVICE_ACCOUNT }}
           CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
@@ -164,4 +188,10 @@ jobs:
             echo "::notice title=Chrome Web Store::CWS_SERVICE_ACCOUNT / CWS_PUBLISHER_ID / CWS_EXTENSION_ID not set; skipping. See store/SUBMITTING.md."
             exit 0
           fi
-          node scripts/publish-chrome.mjs dist/feedster-chrome.zip
+          status=0
+          node scripts/publish-chrome.mjs dist/feedster-chrome.zip > cws.log 2>&1 || status=$?
+          cat cws.log
+          if [ "$status" -ne 0 ]; then
+            node scripts/annotate-error.mjs "Chrome Web Store" < cws.log
+            exit "$status"
+          fi
