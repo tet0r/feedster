@@ -1,5 +1,5 @@
 import { db } from './db.js';
-import { send, formParams } from './http.js';
+import { send, formParams, tooManyFailures, recordFailure } from './http.js';
 import { checkFeverKey } from './sync.js';
 
 // Fever API (https://feedafever.com/api), served at /api/fever.php.
@@ -74,7 +74,11 @@ export async function handleFever(req, res, url) {
   const p = await formParams(req, url);
   const lastRefreshed = db.prepare('SELECT MAX(last_fetched) AS t FROM feeds').get().t;
   const out = { api_version: 3, auth: 0, last_refreshed_on_time: secs(lastRefreshed) };
-  if (!checkFeverKey(p.get('api_key'))) return send(res, 200, out);
+  if (tooManyFailures(req)) return send(res, 429, out);
+  if (!checkFeverKey(p.get('api_key'))) {
+    if (p.has('api_key')) recordFailure(req);
+    return send(res, 200, out);
+  }
   out.auth = 1;
 
   if (p.has('mark')) {

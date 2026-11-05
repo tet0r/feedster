@@ -69,6 +69,7 @@ Publishing needs 2-Step Verification on the Google account that owns the develop
 | Single purpose | Shows the unread article count from the user's own self-hosted Feedster feed reader on the toolbar, with the newest unread headlines and a shortcut to open Feedster. |
 | `alarms` justification | Checks the user's Feedster server for new unread articles on the interval they choose (every 1 to 60 minutes). |
 | `storage` justification | Keeps the user's Feedster address, username, sign-in token and check interval, and the last unread count and headlines, on their device. |
+| `scripting` justification | Adds a small script to the user's own Feedster pages (only the address they connected, which they granted access to). It listens for Feedster's "something changed" event, for example when articles are marked as read, and asks the extension to update the unread count. It reads nothing from the page. |
 | Host permission justification | Feedster is self-hosted, so its address is different for every user. The extension asks for access to the single address the user enters, at the moment they connect, and uses it only to read their unread count and headlines. It never accesses any other site. |
 | Remote code | **No, I am not using remote code** |
 | Data usage | Tick **Authentication information** only (the sign-in token for the user's own Feedster). Tick all three certifications: not sold to third parties, not used for unrelated purposes, not used for creditworthiness or lending. |

@@ -1,5 +1,5 @@
 import { db, tx } from './db.js';
-import { send, formParams } from './http.js';
+import { send, formParams, tooManyFailures, recordFailure, clearFailures } from './http.js';
 import { login, checkToken, syncStatus } from './sync.js';
 import { subscribe } from './feeds.js';
 
@@ -290,8 +290,13 @@ export async function handleGReader(req, res, url, base) {
   const p = await formParams(req, url);
 
   if (path === '/accounts/ClientLogin') {
+    if (tooManyFailures(req)) return send(res, 429, 'Error=TooManyAttempts\n');
     const token = login(p.get('Email'), p.get('Passwd'));
-    if (!token) return send(res, 401, 'Error=BadAuthentication\n');
+    if (!token) {
+      recordFailure(req);
+      return send(res, 401, 'Error=BadAuthentication\n');
+    }
+    clearFailures(req);
     if (p.get('output') === 'json') return send(res, 200, { SID: token, LSID: null, Auth: token });
     return send(res, 200, `SID=${token}\nLSID=null\nAuth=${token}\n`);
   }

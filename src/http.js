@@ -27,3 +27,27 @@ export async function formParams(req, url) {
   }
   return params;
 }
+
+// Sign-in attempts per client address. After too many wrong passwords that address waits, so
+// passwords can't be guessed quickly. Behind a reverse proxy every client shares the proxy's address.
+const MAX_FAILURES = 10;
+const FAILURE_WINDOW_MS = 15 * 60_000;
+const failures = new Map();
+
+const clientKey = (req) => req.socket.remoteAddress || '';
+
+export function tooManyFailures(req) {
+  const entry = failures.get(clientKey(req));
+  if (!entry) return false;
+  if (Date.now() - entry.since > FAILURE_WINDOW_MS) { failures.delete(clientKey(req)); return false; }
+  return entry.count >= MAX_FAILURES;
+}
+
+export function recordFailure(req) {
+  const key = clientKey(req);
+  const entry = failures.get(key);
+  if (!entry || Date.now() - entry.since > FAILURE_WINDOW_MS) failures.set(key, { count: 1, since: Date.now() });
+  else entry.count++;
+}
+
+export const clearFailures = (req) => failures.delete(clientKey(req));

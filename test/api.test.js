@@ -36,7 +36,7 @@ const rss = (n) => `<?xml version="1.0"?><rss version="2.0"><channel><title>Loca
 }</channel></rss>`;
 
 async function web(p, opts = {}) {
-  const res = await fetch(BASE + p, { ...opts, headers: { 'Content-Type': 'application/json', ...opts.headers } });
+  const res = await fetch(BASE + p, { ...opts, headers: { 'Content-Type': 'application/json', 'X-Feedster': '1', ...opts.headers } });
   return res.json();
 }
 

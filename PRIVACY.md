@@ -1,6 +1,6 @@
 # Privacy policy
 
-_Last updated: 3 November 2026_
+_Last updated: 4 November 2026_
 
 This policy covers the **Feedster browser extension** (for Chrome, Edge and Firefox) and the **Feedster** self-hosted feed reader it connects to.
 
@@ -23,6 +23,8 @@ Disconnecting in the extension's settings deletes the token and the saved articl
 ## What the extension sends, and where
 
 Every few minutes (you choose how often), the extension asks your Feedster server for your unread count and newest unread articles, using the sign-in token. When you first connect, it sends your username and app password to that server to sign in. Nothing is sent anywhere else.
+
+On your Feedster's own pages, the extension adds a small script that listens for Feedster's signal that something changed (for example, articles marked as read) and then asks the extension to check the count again. The script reads nothing from the page and sends nothing anywhere.
 
 The browser asks for your permission to access your Feedster address when you connect; the extension cannot read or change any other website.
 

@@ -1,5 +1,5 @@
 import { db } from './db.js';
-import { isPrivateHost, readHead, isBlocked } from './net.js';
+import { isPrivateHost, readHead, isBlocked, fetchChecked } from './net.js';
 
 // Feed icons, looked up on the server and kept in the database:
 // the feed's own image first, then the website's favicon. With neither, the UI shows a letter.
@@ -70,12 +70,11 @@ export function sniffImage(buf) {
   return null;
 }
 
-async function get(url, accept, timeoutMs = 10_000) {
-  return fetch(url, {
+function get(url, accept, allowPrivate, timeoutMs = 10_000) {
+  return fetchChecked(url, {
     headers: { 'User-Agent': USER_AGENT, Accept: accept },
-    redirect: 'follow',
     signal: AbortSignal.timeout(timeoutMs),
-  });
+  }, allowPrivate);
 }
 
 async function readLimited(res) {
@@ -91,13 +90,9 @@ async function readLimited(res) {
  */
 async function fetchIcon(url, allowPrivate, { squareOnly = false } = {}) {
   try {
-    const u = new URL(url);
-    if (!/^https?:$/.test(u.protocol)) return null;
-    if (!allowPrivate && await isPrivateHost(u.hostname)) return null;
-    const res = await get(url, 'image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5');
+    const res = await get(url, 'image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5', allowPrivate);
     if (isBlocked(res)) return { blocked: true };
     if (!res.ok) return null;
-    if (!allowPrivate && await isPrivateHost(new URL(res.url || url).hostname)) return null;
     const buf = await readLimited(res);
     const sniffed = buf && sniffImage(buf);
     if (!sniffed) return null;
@@ -142,7 +137,7 @@ async function siteCandidates(siteUrl, allowPrivate) {
     // The site address comes from the feed, so it gets the same local-network check as icons.
     if (!allowPrivate && await isPrivateHost(new URL(siteUrl).hostname)) return { candidates, reached: true };
     // Home pages can be large and slow; give them longer than an icon gets.
-    const res = await get(siteUrl, 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5', 20_000);
+    const res = await get(siteUrl, 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5', allowPrivate, 20_000);
     reached = true;
     if (isBlocked(res)) return { candidates, reached, blocked: true };
     if (res.ok && (res.headers.get('content-type') || '').includes('html')) {

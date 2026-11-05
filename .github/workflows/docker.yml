@@ -26,7 +26,7 @@ jobs:
         id: tests
         run: |
           npm ci
-          node --test --test-concurrency=1 \
+          node --test --test-concurrency=1 --import ./test/setup.mjs \
             --test-reporter=spec --test-reporter-destination=stdout \
             --test-reporter=tap --test-reporter-destination=test-results.tap \
             test/*.test.js

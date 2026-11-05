@@ -3,12 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { db } from './db.js';
+import { db, getSetting, setSetting } from './db.js';
 import { subscribe, refreshAll, isRefreshing, exportOpml, importOpml } from './feeds.js';
 import { VERSION, availableUpdate, startUpdateChecker } from './updates.js';
 import { getIcon } from './icons.js';
 import { fullArticle } from './fulltext.js';
-import { send, readBody } from './http.js';
+import { send, readBody, tooManyFailures, recordFailure, clearFailures } from './http.js';
 import { syncStatus, setSyncCredentials } from './sync.js';
 import { handleFever } from './fever.js';
 import { handleGReader } from './greader.js';
@@ -26,8 +26,19 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
 
 // ---- auth (optional, single user) ----
 
-const secret = crypto.createHash('sha256').update(`feedster:${PASSWORD}`).digest();
-const sessionToken = () => crypto.createHmac('sha256', secret).update('session').digest('hex');
+// The session cookie is keyed with a random secret kept in the database, so a copied cookie
+// can't be used to work out the password. Changing the password still signs everyone out.
+if (!getSetting('session_key')) setSetting('session_key', crypto.randomBytes(32).toString('hex'));
+const sessionToken = () => crypto.createHmac('sha256', getSetting('session_key')).update(`session:${PASSWORD}`).digest('hex');
+
+// Headers for Feedster's own pages: no framing by other sites, scripts only from Feedster itself.
+// Article images and media come from anywhere, as in any feed reader.
+const PAGE_HEADERS = {
+  'Content-Security-Policy': "default-src 'self'; img-src * data: blob:; media-src *; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+};
+const HTML = { 'Content-Type': 'text/html; charset=utf-8', ...PAGE_HEADERS };
 
 function authed(req) {
   if (!PASSWORD) return true;
@@ -237,7 +248,7 @@ function serveStatic(res, pathname) {
   if (!STATIC[pathname] && !file.startsWith(publicDir)) return send(res, 403, 'Forbidden');
   fs.readFile(file, (err, data) => {
     if (err) return send(res, 404, 'Not found');
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache', ...PAGE_HEADERS });
     res.end(data);
   });
 }
@@ -247,11 +258,11 @@ const escapeAttr = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 // Only paths on this site, so the sign-in form can't be used to send someone elsewhere.
 const safeNext = (next) => (typeof next === 'string' && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : '/');
 
-const loginPage = (next = '/') => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+const loginPage = (next = '/', message = '') => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Feedster</title><link rel="stylesheet" href="/style.css">
 <body class="login"><form method="post" action="/login"><h1>Feedster</h1>
 <input type="hidden" name="next" value="${escapeAttr(safeNext(next))}">
-<input type="password" name="password" placeholder="Password" autofocus required><button>Sign in</button></form></body>`;
+${message ? `<p class="login-error">${escapeAttr(message)}</p>` : ''}<input type="password" name="password" placeholder="Password" autofocus required><button>Sign in</button></form></body>`;
 
 /**
  * "Subscribe in reader" links from browser extensions such as RSSHub Radar, in the formats they
@@ -271,12 +282,19 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname === '/login' && req.method === 'POST') {
-      const form = new URLSearchParams(await readBody(req));
+      const form = new URLSearchParams(await readBody(req, 64 * 1024));
       const pw = form.get('password') || '';
       const next = safeNext(form.get('next'));
+      if (tooManyFailures(req)) return send(res, 429, loginPage(next, 'Too many wrong passwords. Try again in 15 minutes.'), HTML);
       const ok = PASSWORD && pw.length === PASSWORD.length && crypto.timingSafeEqual(Buffer.from(pw), Buffer.from(PASSWORD));
-      if (!ok) return send(res, 401, loginPage(next), { 'Content-Type': 'text/html; charset=utf-8' });
-      res.writeHead(303, { Location: next, 'Set-Cookie': `feedster=${sessionToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000` });
+      if (!ok) {
+        recordFailure(req);
+        return send(res, 401, loginPage(next, 'Wrong password.'), HTML);
+      }
+      clearFailures(req);
+      // Secure when the browser reached Feedster over HTTPS, directly or through a proxy.
+      const https = req.socket.encrypted || /^https$/i.test(String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim());
+      res.writeHead(303, { Location: next, 'Set-Cookie': `feedster=${sessionToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000${https ? '; Secure' : ''}` });
       return res.end();
     }
     const subscribe = req.method === 'GET' && subscribeLink(url);
@@ -292,10 +310,13 @@ const server = http.createServer(async (req, res) => {
     if (!authed(req) && url.pathname !== '/style.css') {
       if (url.pathname.startsWith('/api/')) return send(res, 401, { error: 'Unauthorized' });
       // Come back to the same page (e.g. a subscribe link) after signing in.
-      return send(res, 200, loginPage(url.pathname + url.search), { 'Content-Type': 'text/html; charset=utf-8' });
+      return send(res, 200, loginPage(url.pathname + url.search), HTML);
     }
 
     if (url.pathname.startsWith('/api/')) {
+      // Changes need a header that only Feedster's own page sends: another site's form or script
+      // can't add custom headers to a request to Feedster without Feedster's permission (CORS).
+      if (req.method !== 'GET' && req.headers['x-feedster'] !== '1') return send(res, 403, { error: 'Missing X-Feedster header' });
       for (const [method, pattern, handler] of routes) {
         const m = req.method === method && url.pathname.match(pattern);
         if (!m) continue;

@@ -31,14 +31,21 @@ const S = {
 
 // ---------------------------------------------------------------- api
 
+/** Links from feeds, if they are web addresses. Older articles may hold anything, such as javascript: links. */
+const webUrl = (u) => (/^https?:\/\//i.test(u || '') ? u : '');
+
+// Tells the browser extension, if installed, that unread counts may have changed.
+const announceChange = () => window.dispatchEvent(new Event('feedster:changed'));
+
 async function api(path, opts = {}) {
   const res = await fetch(path, {
     ...opts,
-    headers: opts.body && typeof opts.body === 'string' && !opts.raw ? { 'Content-Type': 'application/json' } : {},
+    headers: { 'X-Feedster': '1', ...(opts.body && typeof opts.body === 'string' && !opts.raw && { 'Content-Type': 'application/json' }) },
   });
   if (res.status === 401) { location.reload(); throw new Error('Signed out'); }
   const data = res.headers.get('content-type')?.includes('json') ? await res.json() : await res.text();
   if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+  if (opts.method && opts.method !== 'GET') announceChange();
   return data;
 }
 const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body || {}) });
@@ -129,6 +136,8 @@ function scopeUnread() {
 
 async function loadState() {
   const s = await api('/api/state');
+  // New articles from a refresh also change the count.
+  if (S.totals.unread !== s.totals.unread) announceChange();
   Object.assign(S, { folders: s.folders, feeds: s.feeds, totals: s.totals });
   // Drop a remembered scope whose feed/folder no longer exists.
   if ((S.scope.type === 'feed' && !feedById(S.scope.id)) || (S.scope.type === 'folder' && !folderById(S.scope.id))) {
@@ -143,7 +152,7 @@ async function loadState() {
 
 // Shows the running version, and a banner when a newer release exists (until dismissed for that version)
 function showVersion(s) {
-  const release = s.update?.url ? `<a href="${esc(s.update.url)}" target="_blank" rel="noopener noreferrer">` : '';
+  const release = webUrl(s.update?.url) ? `<a href="${esc(s.update.url)}" target="_blank" rel="noopener noreferrer">` : '';
   $('#version').innerHTML = `Feedster ${esc(s.version === 'dev' ? '(development build)' : `v${s.version}`)}`
     + (s.update ? ` · ${release || '<span>'}<span class="new">v${esc(s.update.version)} available</span>${release ? '</a>' : '</span>'}` : '');
   const banner = $('#update');
@@ -307,7 +316,7 @@ function openEntityMenu({ type, id }, rect) {
         if (title?.trim()) { await patch(`/api/feeds/${id}`, { title: title.trim() }); await loadState(); }
       } },
     );
-    if (feed.site_url) items.push({ text: 'Open website', run: () => window.open(feed.site_url, '_blank', 'noopener') });
+    if (webUrl(feed.site_url)) items.push({ text: 'Open website', run: () => window.open(feed.site_url, '_blank', 'noopener') });
     items.push('-', { label: 'Move to' });
     items.push({ text: `${feed.folder_id ? '' : '✓ '}No folder`, run: () => moveFeed(id, null) });
     for (const f of S.folders) items.push({ text: `${feed.folder_id === f.id ? '✓ ' : ''}${f.name}`, run: () => moveFeed(id, f.id) });
@@ -410,7 +419,7 @@ function itemHtml(a, i) {
   return `<div class="item ${a.read ? 'read' : ''} ${i === S.selected ? 'selected' : ''}" data-i="${i}">
     <div class="meta"><span class="src">${esc(a.feed_title)}</span>${a.starred ? '<span class="star">★</span>' : ''}<span class="date" title="${esc(new Date(a.published).toLocaleString())}">${timeAgo(a.published)}</span></div>
     <div class="t">${esc(a.title)}</div>
-    ${a.image ? `<img class="thumb" src="${esc(a.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+    ${webUrl(a.image) ? `<img class="thumb" src="${esc(a.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
     <div class="s">${esc(a.snippet)}</div>
   </div>`;
 }
@@ -531,7 +540,7 @@ function headlineOnly(a) {
   let host = '';
   try { host = new URL(a.url).hostname.replace(/^www\./, ''); } catch { /* no link */ }
   return `<p class="muted">This feed only shares headlines, not the article text.</p>
-    ${host ? `<p><a class="btn" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">Read the full article on ${esc(host)} ↗</a></p>` : ''}`;
+    ${host && webUrl(a.url) ? `<p><a class="btn" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">Read the full article on ${esc(host)} ↗</a></p>` : ''}`;
 }
 
 // ---- full articles: fetched from the article's page by the server (see fulltext.js)
@@ -618,7 +627,7 @@ function articleInner(a, { full = false } = {}) {
       <button class="icon-btn" data-act="read" title="${a.read ? 'Mark as unread' : 'Mark as read'} (m)">◐</button>
       ${a.url ? '<button class="icon-btn" data-act="open" title="Open original (v)">↗</button>' : ''}
     </div>
-    <h1 class="ra-title">${a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a>` : esc(a.title)}</h1>
+    <h1 class="ra-title">${webUrl(a.url) ? `<a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a>` : esc(a.title)}</h1>
     <div class="ra-byline">${a.author ? `${esc(a.author)} · ` : ''}<time title="${esc(date.toLocaleString())}">${esc(date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}</time></div>
     ${hasImage ? `<img class="ra-hero" src="${esc(a.image)}" alt="" referrerpolicy="no-referrer">` : ''}
     <div class="ra-body">${body}</div>`;
@@ -722,7 +731,7 @@ function toggleStar(i) {
 
 function openOriginal(i) {
   const a = S.items[i];
-  if (!a?.url) return;
+  if (!webUrl(a?.url)) return;
   setRead(i, true);
   window.open(a.url, '_blank', 'noopener');
 }

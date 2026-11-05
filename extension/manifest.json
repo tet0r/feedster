@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Feedster",
   "description": "Shows your Feedster unread count in the toolbar, with your latest unread articles and a button to open Feedster.",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -19,21 +19,32 @@
   },
   "background": {
     "service_worker": "background.js",
-    "scripts": ["background.js"],
+    "scripts": [
+      "background.js"
+    ],
     "type": "module"
   },
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
   },
-  "permissions": ["alarms", "storage"],
-  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "permissions": [
+    "alarms",
+    "storage",
+    "scripting"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
   "browser_specific_settings": {
     "gecko": {
       "id": "feedster-extension@tet0r.github.io",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
-        "required": ["none"]
+        "required": [
+          "none"
+        ]
       }
     }
   }

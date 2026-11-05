@@ -22,7 +22,7 @@ let feedServer;
 let app;
 let dataDir;
 
-const web = (p, opts = {}) => fetch(SERVER + p, { ...opts, headers: { 'Content-Type': 'application/json' } }).then((r) => r.json());
+const web = (p, opts = {}) => fetch(SERVER + p, { ...opts, headers: { 'Content-Type': 'application/json', 'X-Feedster': '1' } }).then((r) => r.json());
 
 before(async () => {
   feedServer = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'application/rss+xml' }); res.end(FEED); });
@@ -82,12 +82,29 @@ function fakeBrowser(initial) {
   const listeners = {};
   const on = (name) => ({ addListener: (fn) => { listeners[name] = fn; } });
   const badge = { text: '', color: '', title: '' };
+  const scripts = new Map();
+  const granted = new Set(initial.granted || []);
+  // Like the browser: changes to storage are announced to onChanged listeners.
+  const changed = (keys) => listeners.storage?.(Object.fromEntries(keys.map((k) => [k, {}])), 'local');
   globalThis.chrome = {
-    storage: { local: {
-      get: async (keys) => Object.fromEntries([].concat(keys).filter((k) => k in store).map((k) => [k, store[k]])),
-      set: async (obj) => Object.assign(store, obj),
-      remove: async (keys) => [].concat(keys).forEach((k) => delete store[k]),
-    } },
+    storage: {
+      local: {
+        get: async (keys) => Object.fromEntries([].concat(keys).filter((k) => k in store).map((k) => [k, store[k]])),
+        set: async (obj) => { Object.assign(store, obj); changed(Object.keys(obj)); },
+        remove: async (keys) => { [].concat(keys).forEach((k) => delete store[k]); changed([].concat(keys)); },
+      },
+      onChanged: on('storage'),
+    },
+    permissions: { contains: async ({ origins }) => origins.every((o) => granted.has(o)) },
+    scripting: {
+      registerContentScripts: async (list) => list.forEach((c) => {
+        if (scripts.has(c.id)) throw new Error(`Duplicate script ID '${c.id}'`);
+        scripts.set(c.id, c);
+      }),
+      unregisterContentScripts: async ({ ids }) => ids.forEach((id) => {
+        if (!scripts.delete(id)) throw new Error(`Nonexistent script ID '${id}'`);
+      }),
+    },
     action: {
       setBadgeText: async ({ text }) => { badge.text = text; },
       setBadgeBackgroundColor: async ({ color }) => { badge.color = color; },
@@ -97,12 +114,12 @@ function fakeBrowser(initial) {
     runtime: { onInstalled: on('installed'), onStartup: on('startup'), onMessage: on('message'), openOptionsPage: () => { badge.openedOptions = true; } },
   };
   const send = (message) => new Promise((resolve) => listeners.message(message, {}, resolve));
-  return { store, badge, listeners, send };
+  return { store, badge, listeners, send, scripts };
 }
 
 test('the toolbar badge follows the unread count, and asks to sign in again when needed', async () => {
   const token = await signIn(SERVER, USER, PASS);
-  const browser = fakeBrowser({ server: SERVER, username: USER, token, interval: 5 });
+  const browser = fakeBrowser({ server: SERVER, username: USER, token, interval: 5, granted: [originPattern(SERVER)] });
   await import(`../extension/background.js?${Date.now()}`);
 
   await browser.listeners.installed({ reason: 'install' });
@@ -111,10 +128,14 @@ test('the toolbar badge follows the unread count, and asks to sign in again when
   assert.equal(browser.badge.alarm, 5);
   assert.equal(browser.badge.openedOptions, true, 'first install opens the setup page');
   assert.equal(browser.store.state.items.length, 3, 'the popup has articles to show');
+  assert.deepEqual(browser.scripts.get('feedster-page')?.matches, [originPattern(SERVER)], "watches the connected Feedster's pages");
+  assert.deepEqual(browser.scripts.get('feedster-page').js, ['feedster-page.js']);
+  await browser.listeners.startup();
+  assert.equal(browser.scripts.size, 1, 'registering again on startup replaces the script');
 
   // Reading an article in Feedster lowers the count on the next check.
   const article = (await web('/api/articles?view=unread')).items[0];
-  await fetch(`${SERVER}/api/articles/${article.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ read: true }) });
+  await fetch(`${SERVER}/api/articles/${article.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Feedster': '1' }, body: JSON.stringify({ read: true }) });
   await browser.send({ type: 'refresh' });
   assert.equal(browser.badge.text, '2');
 
@@ -127,9 +148,38 @@ test('the toolbar badge follows the unread count, and asks to sign in again when
 
   // Not connected at all: no badge, and the title says what to do.
   await chrome.storage.local.remove('token');
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(browser.scripts.size, 0, 'disconnecting stops watching Feedster pages');
   await browser.send({ type: 'refresh' });
   assert.equal(browser.badge.text, '');
   assert.equal(browser.badge.title, 'Feedster: click to connect');
+});
+
+test('Feedster pages ask for a fresh count once changes settle', async () => {
+  const sent = [];
+  const page = new EventTarget();
+  globalThis.window = page;
+  globalThis.location = { href: `${SERVER}/` };
+  globalThis.chrome = {
+    storage: { local: { get: async () => ({ server: SERVER }) } },
+    runtime: { sendMessage: async (m) => { sent.push(m); } },
+  };
+  try {
+    await import(`../extension/feedster-page.js?${Date.now()}`);
+    // Marking several articles read while scrolling
+    for (let i = 0; i < 5; i++) page.dispatchEvent(new Event('feedster:changed'));
+    await new Promise((r) => setTimeout(r, 1300));
+    assert.deepEqual(sent, [{ type: 'refresh' }]);
+
+    // Another site on the same host (a different sub-path) is ignored.
+    globalThis.location = { href: 'http://127.0.0.1:1/other/' };
+    page.dispatchEvent(new Event('feedster:changed'));
+    await new Promise((r) => setTimeout(r, 1300));
+    assert.equal(sent.length, 1);
+  } finally {
+    delete globalThis.window;
+    delete globalThis.location;
+  }
 });
 
 test("the extension's version matches the release (CI stamps it too)", () => {

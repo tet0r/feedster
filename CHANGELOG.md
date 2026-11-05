@@ -4,6 +4,21 @@ All notable changes to Feedster are listed here, newest first. Version numbers f
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-04
+
+### Added
+
+- The browser extension's count updates within a couple of seconds when you mark articles read (one, several, or all) or star them in Feedster, instead of at its next timed check. On the connected Feedster's pages only, a small script passes on Feedster's "something changed" signal. This adds the `scripting` permission, which browsers grant without asking.
+
+### Security
+
+- Article, site and image links from feeds must be web addresses (http or https). A feed could previously give an article a `javascript:` link that ran inside Feedster when you clicked the title. Links already stored are checked in the page too.
+- Changes through Feedster's API need a header that only Feedster's own page sends, so another site can't make changes through a signed-in browser.
+- Feedster's pages send a Content Security Policy (scripts only from Feedster, no framing by other sites), `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
+- After 10 wrong passwords in 15 minutes, sign-in from that address pauses for the rest of the 15 minutes. This covers the web sign-in, reading apps and the Fever API.
+- The sign-in cookie is keyed with a random secret stored in the database, so a copied cookie can't be used to work out the password, and it is marked `Secure` when Feedster is reached over HTTPS. Everyone is signed out once by this update.
+- Fetching icons and full articles follows redirects one hop at a time, checking each for local-network addresses, and the check now covers every way of writing those addresses (such as `[::ffff:7f00:1]` for 127.0.0.1) and more reserved ranges.
+
 ### Changed
 
 - The browser extension is on the Chrome Web Store. Settings → Browser extension links to the listing for Chrome and Edge, and the README covers Firefox until its listing is approved.

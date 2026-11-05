@@ -326,3 +326,4 @@ body.login button { padding: 8px; border: 0; border-radius: 6px; background: var
   .filterbar input { flex-basis: 100%; }
   .ra-title { font-size: 22px; }
 }
+body.login .login-error { margin: 0; color: #cf222e; font-size: 14px; }

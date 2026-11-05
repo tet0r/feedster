@@ -45,7 +45,10 @@ function toTime(v) {
 
 function resolveUrl(href, base) {
   if (!href) return null;
-  try { return new URL(href, base).href; } catch { return null; }
+  try {
+    const url = new URL(href, base);
+    return /^https?:$/.test(url.protocol) ? url.href : null;
+  } catch { return null; }
 }
 
 function stripTags(html) {

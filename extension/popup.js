@@ -94,7 +94,7 @@ document.addEventListener('click', (e) => {
   if (act === 'settings') { chrome.runtime.openOptionsPage(); window.close(); }
   if (act === 'refresh') refresh();
   const item = e.target.closest('.item');
-  if (item?.dataset.url) { chrome.tabs.create({ url: item.dataset.url }); window.close(); }
+  if (/^https?:\/\//i.test(item?.dataset.url || '')) { chrome.tabs.create({ url: item.dataset.url }); window.close(); }
 });
 $('#open').addEventListener('click', openFeedster);
 $('#refresh').addEventListener('click', refresh);

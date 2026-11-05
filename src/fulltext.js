@@ -1,7 +1,7 @@
 import { parseHTML } from 'linkedom';
 import { Readability } from '@mozilla/readability';
 import { db } from './db.js';
-import { isPrivateHost, readHead, isBlocked } from './net.js';
+import { isPrivateHost, readHead, isBlocked, fetchChecked } from './net.js';
 
 // Many feeds carry only a summary. This fetches the article's page and pulls out the main
 // text with Readability (the engine behind Firefox's Reader View), once per article.
@@ -43,15 +43,10 @@ export function extract(html, pageUrl) {
 }
 
 async function fetchPage(url, allowPrivate) {
-  const u = new URL(url);
-  if (!/^https?:$/.test(u.protocol)) throw new Error('not a web address');
-  if (!allowPrivate && await isPrivateHost(u.hostname)) throw new Error('the address is on a private network');
-  const res = await fetch(url, {
+  const res = await fetchChecked(url, {
     headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5' },
-    redirect: 'follow',
     signal: AbortSignal.timeout(20_000),
-  });
-  if (!allowPrivate && await isPrivateHost(new URL(res.url || url).hostname)) throw new Error('the address is on a private network');
+  }, allowPrivate);
   if (isBlocked(res)) throw new Error("the site asked for a browser check, which Feedster can't complete");
   if (res.status === 401 || res.status === 403 || res.status === 429) throw new Error(`the site refused the request (HTTP ${res.status})`);
   if (!res.ok) throw new Error(`the site returned HTTP ${res.status}`);

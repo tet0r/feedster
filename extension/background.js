@@ -1,4 +1,4 @@
-import { unreadSummary, badgeText, AuthError } from './api.js';
+import { unreadSummary, badgeText, AuthError, originPattern } from './api.js';
 
 // Checks Feedster on a timer, keeps the toolbar badge current, and saves the latest result
 // so the popup can show it instantly.
@@ -53,12 +53,33 @@ async function schedule() {
   await chrome.alarms.create('refresh', { periodInMinutes: Math.max(1, Number(interval) || 5) });
 }
 
+const PAGE_SCRIPT = 'feedster-page';
+
+/**
+ * Put feedster-page.js on the connected Feedster's pages, so changes made there update the badge
+ * at once. It uses the same address pattern the person allowed when connecting.
+ */
+async function watchPages() {
+  const { server, token } = await settings();
+  await chrome.scripting.unregisterContentScripts({ ids: [PAGE_SCRIPT] }).catch(() => {});
+  if (!server || !token) return;
+  const origins = [originPattern(server)];
+  if (!await chrome.permissions.contains({ origins })) return;
+  await chrome.scripting.registerContentScripts([{ id: PAGE_SCRIPT, matches: origins, js: ['feedster-page.js'], runAt: 'document_idle' }]);
+}
+
+// Connecting, switching servers or disconnecting.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && (changes.server || changes.token)) watchPages().catch(console.error);
+});
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'refresh') refresh();
 });
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   await schedule();
+  await watchPages().catch(console.error);
   await refresh();
   // First install: go straight to the setup page.
   if (reason === 'install') chrome.runtime.openOptionsPage();
@@ -66,10 +87,12 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
 
 chrome.runtime.onStartup.addListener(async () => {
   await schedule();
+  await watchPages().catch(console.error);
   await refresh();
 });
 
-// The popup asks for a fresh count when opened; the options page after connecting.
+// The popup asks for a fresh count when opened, the options page after connecting, and
+// Feedster's own page (through feedster-page.js) after a change.
 chrome.runtime.onMessage.addListener((message, _sender, reply) => {
   if (message?.type === 'refresh') {
     refresh().then(() => reply({ ok: true }));
