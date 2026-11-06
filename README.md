@@ -69,9 +69,9 @@ Apps that only offer a **Fever** account can use `https://your-server/api/fever.
 
 ## Browser extension
 
-The Feedster extension for Chrome, Edge and Firefox shows your unread count on the toolbar. Click it to see your newest headlines or open Feedster.
+<img align="left" src="docs/extension-popup.png" width="300" hspace="12" alt="The Feedster extension's popup in Chrome: the unread count, the newest unread headlines, and an Open Feedster button">
 
-<img src="docs/extension-popup.png" width="348" alt="The Feedster extension's popup in Chrome: the unread count, the newest unread headlines, and an Open Feedster button">
+The Feedster extension for Chrome, Edge and Firefox shows your unread count on the toolbar. Click it to see your newest headlines or open Feedster.
 
 **Chrome and Edge:** install it from the [Chrome Web Store](https://chromewebstore.google.com/detail/feedster/lecfbammajmdcafoodjalelofaelbaoc).
 
@@ -80,6 +80,8 @@ The Feedster extension for Chrome, Edge and Firefox shows your unread count on t
 After installing, sign in with your reading-app username and password.
 
 To subscribe to the site you're on, use [RSSHub Radar](https://github.com/DIYgod/RSSHub-Radar) set to FreshRSS with your Feedster address, or drag the **+ Feedster** bookmarklet from Feedster's Settings to your bookmarks bar.
+
+<br clear="left">
 
 ## Settings
 
