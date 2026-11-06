@@ -4,6 +4,8 @@ A self-hosted feed reader for RSS, Atom and JSON Feed. Folders, unread counts, s
 
 Works in any browser, syncs with popular reader apps on Android and iPhone, and has a browser extension that shows your unread count.
 
+![Feedster with subscriptions in the sidebar, the article list in the middle and an article open on the right](docs/screenshot.webp)
+
 ## Install
 
 With Docker:
