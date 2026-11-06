@@ -71,6 +71,8 @@ Apps that only offer a **Fever** account can use `https://your-server/api/fever.
 
 The Feedster extension for Chrome, Edge and Firefox shows your unread count on the toolbar. Click it to see your newest headlines or open Feedster.
 
+<img src="docs/extension.png" width="348" alt="The Feedster extension's popup in Chrome: the unread count, the newest unread headlines, and an Open Feedster button">
+
 **Chrome and Edge:** install it from the [Chrome Web Store](https://chromewebstore.google.com/detail/feedster/lecfbammajmdcafoodjalelofaelbaoc).
 
 **Firefox:** the Firefox Add-ons listing is on the way. Until then, download [feedster-firefox.zip](https://github.com/tet0r/feedster/releases/latest/download/feedster-firefox.zip) and load it with **Load Temporary Add-on** at `about:debugging#/runtime/this-firefox`. It stays until Firefox restarts.
