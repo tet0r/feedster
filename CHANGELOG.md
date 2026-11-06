@@ -4,8 +4,11 @@ All notable changes to Feedster are listed here, newest first. Version numbers f
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-05
+
 ### Changed
 
+- A release only sends the browser extension to the stores when the extension itself changed. This one doesn't, so the stores keep 1.5.0.
 - Article thumbnails in the list are on the left of the headline and summary instead of the right.
 
 ## [1.5.0] - 2026-11-04

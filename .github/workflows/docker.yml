@@ -59,6 +59,16 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "minor=${version%.*}" >> "$GITHUB_OUTPUT"
           if git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then echo "new=false" >> "$GITHUB_OUTPUT"; else echo "new=true" >> "$GITHUB_OUTPUT"; fi
+          # Store reviews take days, so a release only sends the extension to the stores when its
+          # files changed since the last release (the version number in its manifest doesn't count).
+          last=$(git tag --list 'v*' --sort=-v:refname | grep -vx "v$version" | head -n 1 || true)
+          if [ -n "$last" ] && git diff --quiet "$last" HEAD -- extension ':(exclude)extension/manifest.json' \
+            && [ "$(git show "$last:extension/manifest.json" | grep -v '"version"')" = "$(grep -v '"version"' extension/manifest.json)" ]; then
+            echo "extension_changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Browser extension::Unchanged since $last, so this release doesn't send it to the stores."
+          else
+            echo "extension_changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       # The toolbar extension ships with each release, stamped with the release version:
       # feedster-chrome.zip and feedster-firefox.zip for the stores, and feedster-extension.zip
@@ -155,7 +165,7 @@ jobs:
       - name: Publish extension to Firefox Add-ons
         if: >-
           !cancelled() && steps.extension.outcome == 'success' && github.ref == 'refs/heads/main' && (
-            (github.event_name == 'push' && steps.release.outcome == 'success') ||
+            (github.event_name == 'push' && steps.release.outcome == 'success' && steps.version.outputs.extension_changed == 'true') ||
             (github.event_name == 'workflow_dispatch' && contains(fromJSON('["both", "firefox"]'), inputs.publish)))
         env:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
@@ -177,7 +187,7 @@ jobs:
       - name: Publish extension to Chrome Web Store
         if: >-
           !cancelled() && steps.extension.outcome == 'success' && github.ref == 'refs/heads/main' && (
-            (github.event_name == 'push' && steps.release.outcome == 'success') ||
+            (github.event_name == 'push' && steps.release.outcome == 'success' && steps.version.outputs.extension_changed == 'true') ||
             (github.event_name == 'workflow_dispatch' && contains(fromJSON('["both", "chrome"]'), inputs.publish)))
         env:
           CWS_SERVICE_ACCOUNT: ${{ secrets.CWS_SERVICE_ACCOUNT }}

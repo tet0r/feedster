@@ -108,7 +108,7 @@ In GitHub: **tet0r/feedster → Settings → Secrets and variables → Actions �
 | `CWS_PUBLISHER_ID` | Chrome Developer Dashboard → Publisher → Settings |
 | `CWS_EXTENSION_ID` | Chrome Developer Dashboard → the item's ID |
 
-From then on, each new `VERSION` on `main` submits the extension to both stores for review. The version number is stamped from `VERSION`, so it always goes up.
+From then on, each new `VERSION` on `main` submits the extension to both stores for review, if anything in `extension/` changed since the previous release. The version number is stamped from `VERSION`, so it always goes up.
 
 The two stores are published separately, so a problem with one doesn't hold up the other, and the reason for a failure appears on the run's summary page. To send the current version to a store again, open **Actions → Docker image → Run workflow** on `main` and choose a store under **Publish the browser extension**.
 
