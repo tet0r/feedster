@@ -4,6 +4,10 @@ All notable changes to Feedster are listed here, newest first. Version numbers f
 
 ## [Unreleased]
 
+### Changed
+
+- Article thumbnails in the list are on the left of the headline and summary instead of the right.
+
 ## [1.5.0] - 2026-11-04
 
 ### Added
